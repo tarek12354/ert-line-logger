@@ -1,11 +1,155 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useEffect, useCallback } from 'react';
+import { useBluetooth } from '@/hooks/useBluetooth';
+import { StatusIndicator } from '@/components/StatusIndicator';
+import { ControlPanel } from '@/components/ControlPanel';
+import { MeasurementPanel } from '@/components/MeasurementPanel';
+import { toast } from 'sonner';
+import { Zap, AlertTriangle } from 'lucide-react';
 
 const Index = () => {
+  const [measurements, setMeasurements] = useState<string[]>([]);
+  const [aValue, setAValue] = useState(5.0);
+
+  const {
+    isConnected,
+    isConnecting,
+    deviceName,
+    error,
+    isSupported,
+    connect,
+    disconnect,
+    send,
+    setOnDataCallback,
+  } = useBluetooth();
+
+  const handleData = useCallback((data: string) => {
+    const line = data.trim();
+    if (line) {
+      setMeasurements(prev => [...prev, line]);
+      toast.success(`Mesure #${measurements.length + 1} reçue`);
+    }
+  }, [measurements.length]);
+
+  useEffect(() => {
+    setOnDataCallback(handleData);
+  }, [handleData, setOnDataCallback]);
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
+  const handleConnect = async () => {
+    const success = await connect();
+    if (success) {
+      toast.success('Connecté à ESP32_ERT');
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await disconnect();
+    toast.info('Déconnecté');
+  };
+
+  const handleStartLine = async (a: number) => {
+    setMeasurements([]);
+    setAValue(a);
+    await send(`A=${a}`);
+    await send('RESET');
+    toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
+  };
+
+  const handleNextMeasure = async () => {
+    await send('NEXT');
+    toast.info('Commande NEXT envoyée');
+  };
+
+  const handleExport = () => {
+    const content = [
+      'ERT LINE',
+      String(aValue),
+      String(measurements.length),
+      ...measurements.map(m => m.replace(',', ' ')),
+    ].join('\n');
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ert_line_${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Fichier exporté (${measurements.length} mesures)`);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-background bg-grid">
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
+      
+      <div className="relative min-h-screen flex flex-col p-4 max-w-lg mx-auto">
+        {/* Header */}
+        <header className="text-center py-6">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/30">
+              <Zap className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-gradient-primary">
+              ERT App
+            </h1>
+          </div>
+          <p className="text-muted-foreground text-sm font-mono">
+            Tomographie de Résistivité Électrique
+          </p>
+        </header>
+
+        {/* Browser Support Warning */}
+        {!isSupported && (
+          <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-destructive font-semibold text-sm">
+                Web Bluetooth non supporté
+              </p>
+              <p className="text-destructive/70 text-xs mt-1">
+                Utilisez Chrome ou Edge sur Android/Windows/Mac pour la connexion Bluetooth.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Status */}
+        <div className="mb-4">
+          <StatusIndicator
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            deviceName={deviceName}
+          />
+        </div>
+
+        {/* Controls */}
+        <div className="mb-4">
+          <ControlPanel
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onStartLine={handleStartLine}
+            onNextMeasure={handleNextMeasure}
+            onExport={handleExport}
+          />
+        </div>
+
+        {/* Measurements */}
+        <MeasurementPanel measurements={measurements} />
+
+        {/* Footer */}
+        <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
+          <p>v1.0.0 • Web Bluetooth API</p>
+        </footer>
       </div>
     </div>
   );
