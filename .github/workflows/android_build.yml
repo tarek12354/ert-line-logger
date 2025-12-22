@@ -21,16 +21,16 @@ jobs:
       - name: Build Web Project
         run: npm run build
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Prepare Android Platform
         run: |
           npm install @capacitor/android
-          npx cap add android || echo "Android platform already exists"
+          npx cap add android || echo "Android already exists"
           npx cap sync android
 
       - name: Build APK with Gradle
