@@ -27,8 +27,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Sync Capacitor Android
+      - name: Prepare Android Platform
         run: |
+          npm install @capacitor/android
+          npx cap add android || echo "Android platform already exists"
           npx cap sync android
 
       - name: Build APK with Gradle
