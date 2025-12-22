@@ -16,6 +16,7 @@ const Index = () => {
     deviceName,
     error,
     isSupported,
+    isNative,
     connect,
     disconnect,
     send,
@@ -148,7 +149,7 @@ const Index = () => {
 
         {/* Footer */}
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
-          <p>v1.0.0 • Web Bluetooth API</p>
+          <p>v1.0.0 • {isNative ? 'Native BLE' : 'Web Bluetooth'}</p>
         </footer>
       </div>
     </div>
