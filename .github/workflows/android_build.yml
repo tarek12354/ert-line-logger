@@ -27,25 +27,24 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Fix and Sync Android Platform
+      - name: Reset and Rebuild Android Platform
         run: |
-          npm install @capacitor/android
-          # تحديث ملفات النظام مع الحفاظ على التعديلات اليدوية
-          npx cap add android || echo "Android already exists"
+          npm install @capacitor/android @capacitor/cli
+          # حذف أي مجلد أندرويد قديم لضمان بناء نظيف
+          rm -rf android
+          npx cap add android
+          
+          # إضافة أذونات البلوتوث برمجياً إلى الملف الجديد
+          SED_COMMAND='/<\/manifest>/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+          sed -i "$SED_COMMAND" android/app/src/main/AndroidManifest.xml
+          
           npx cap sync android
 
       - name: Build APK with Gradle
         run: |
           cd android
-          # التأكد من وجود ملف gradlew وإعطائه الصلاحيات
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            echo "Error: gradlew not found. Running doctor..."
-            npx cap doctor
-            exit 1
-          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
