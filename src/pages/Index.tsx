@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBluetooth } from '@/hooks/useBluetooth';
 import { StatusIndicator } from '@/components/StatusIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { toast } from 'sonner';
-import { Zap, AlertTriangle } from 'lucide-react';
+import { Zap, AlertTriangle, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
+  const navigate = useNavigate();
   const [measurements, setMeasurements] = useState<string[]>([]);
   const [aValue, setAValue] = useState(5.0);
 
@@ -101,6 +104,15 @@ const Index = () => {
             <h1 className="text-3xl font-bold text-gradient-primary">
               ERT App
             </h1>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate('/diagnostic')}
+              className="ml-2"
+              title="Diagnostic Bluetooth"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
           </div>
           <p className="text-muted-foreground text-sm font-mono">
             Tomographie de Résistivité Électrique
