@@ -27,14 +27,14 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Reset and Rebuild Android Platform
+      - name: Clean and Rebuild Android Platform
         run: |
           npm install @capacitor/android @capacitor/cli
-          # حذف أي مجلد أندرويد قديم لضمان بناء نظيف
+          # حذف المجلد القديم لضمان بناء نظيف تماماً
           rm -rf android
           npx cap add android
           
-          # إضافة أذونات البلوتوث برمجياً إلى الملف الجديد
+          # إضافة أذونات البلوتوث برمجياً داخل الملف الصحيح
           SED_COMMAND='/<\/manifest>/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
           sed -i "$SED_COMMAND" android/app/src/main/AndroidManifest.xml
           
