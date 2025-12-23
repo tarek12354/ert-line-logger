@@ -27,23 +27,23 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Repair and Prepare Android Platform
+      - name: Fix and Sync Android Platform
         run: |
           npm install @capacitor/android
-          # هذا السطر سيقوم بإضافة الملفات المفقودة دون حذف ملف الأذونات الذي أنشأته
-          npx cap add android || echo "Android already exists, syncing..."
+          # تحديث ملفات النظام مع الحفاظ على التعديلات اليدوية
+          npx cap add android || echo "Android already exists"
           npx cap sync android
 
       - name: Build APK with Gradle
         run: |
           cd android
-          # تأكد من أننا نعطي صلاحية التنفيذ فقط إذا وجد الملف
+          # التأكد من وجود ملف gradlew وإعطائه الصلاحيات
           if [ -f "gradlew" ]; then
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "Error: gradlew not found. Checking directory structure..."
-            ls -R
+            echo "Error: gradlew not found. Running doctor..."
+            npx cap doctor
             exit 1
           fi
 
