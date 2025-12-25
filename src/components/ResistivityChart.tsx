@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Scatter, ComposedChart, Cell } from 'recharts';
 import { BarChart3, Eye, EyeOff } from 'lucide-react';
 
 interface ResistivityChartProps {
@@ -110,7 +110,7 @@ export const ResistivityChart = ({ measurements, aValue }: ResistivityChartProps
           {/* Chart */}
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
+              <ComposedChart
                 data={chartData}
                 layout="vertical"
                 margin={{ top: 10, right: 30, left: 40, bottom: 10 }}
@@ -157,10 +157,23 @@ export const ResistivityChart = ({ measurements, aValue }: ResistivityChartProps
                   type="monotone" 
                   dataKey="resistivity"
                   stroke="hsl(var(--primary))"
-                  fill="hsl(var(--primary) / 0.3)"
+                  fill="hsl(var(--primary) / 0.2)"
                   strokeWidth={2}
                 />
-              </AreaChart>
+                <Scatter 
+                  dataKey="resistivity" 
+                  name="Measurements"
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={getClassificationColor(entry.classification)}
+                      stroke={getClassificationColor(entry.classification)}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </Scatter>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
