@@ -121,5 +121,8 @@ export const useBluetooth = () => {
     onDataCallbackRef.current = callback;
   }, []);
 
-  return { ...state, isNative, connect, disconnect, send, setOnDataCallback, requestPermissions };
+  // Check Web Bluetooth support for browsers
+  const isSupported = isNative || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
+
+  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions };
 };
