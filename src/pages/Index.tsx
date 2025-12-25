@@ -13,6 +13,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [measurements, setMeasurements] = useState<string[]>([]);
   const [aValue, setAValue] = useState(5.0);
+  const [showChart, setShowChart] = useState(false);
 
   const {
     isConnected,
@@ -154,6 +155,8 @@ const Index = () => {
             onStartLine={handleStartLine}
             onNextMeasure={handleNextMeasure}
             onExport={handleExport}
+            onAnalyse={() => setShowChart(!showChart)}
+            hasMeasurements={measurements.length > 0}
           />
         </div>
 
@@ -161,7 +164,7 @@ const Index = () => {
         <MeasurementPanel measurements={measurements} />
 
         {/* Resistivity Analysis Chart */}
-        <ResistivityChart measurements={measurements} aValue={aValue} />
+        {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
 
         {/* Footer */}
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
