@@ -1,11 +1,8 @@
 {
-  "appId": "app.lovable.c06b91eed1cb4c31bedae76cdc7b3121",
+  "appId": "app.lovable.ertapp",
   "appName": "ERT App",
   "webDir": "dist",
-  "server": {
-    "url": "https://c06b91ee-d1cb-4c31-beda-e76cdc7b3121.lovableproject.com?forceHideBadge=true",
-    "cleartext": true
-  },
+  "bundledWebRuntime": false,
   "plugins": {
     "BluetoothLe": {
       "displayStrings": {
