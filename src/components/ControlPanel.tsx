@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Play, SkipForward, Download, Bluetooth, Power } from 'lucide-react';
+import { Play, SkipForward, Download, Bluetooth, Power, BarChart3 } from 'lucide-react';
 
 interface ControlPanelProps {
   isConnected: boolean;
@@ -12,6 +12,8 @@ interface ControlPanelProps {
   onStartLine: (a: number) => void;
   onNextMeasure: () => void;
   onExport: () => void;
+  onAnalyse: () => void;
+  hasMeasurements: boolean;
 }
 
 export const ControlPanel = ({
@@ -22,6 +24,8 @@ export const ControlPanel = ({
   onStartLine,
   onNextMeasure,
   onExport,
+  onAnalyse,
+  hasMeasurements,
 }: ControlPanelProps) => {
   const [aValue, setAValue] = useState('5.0');
 
@@ -97,6 +101,16 @@ export const ControlPanel = ({
         >
           <Download className="h-4 w-4" />
           Exporter fichier
+        </Button>
+
+        <Button
+          variant="secondary"
+          className="col-span-2"
+          onClick={onAnalyse}
+          disabled={!hasMeasurements}
+        >
+          <BarChart3 className="h-4 w-4" />
+          📊 Analyse
         </Button>
       </div>
     </div>

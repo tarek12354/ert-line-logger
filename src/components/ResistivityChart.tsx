@@ -1,9 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Scatter, ComposedChart, Cell } from 'recharts';
-import { BarChart3, Eye, EyeOff } from 'lucide-react';
+import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Scatter, ComposedChart, Cell } from 'recharts';
+import { BarChart3 } from 'lucide-react';
 
 interface ResistivityChartProps {
   measurements: string[];
@@ -37,7 +36,6 @@ const getClassificationColor = (classification: 'void' | 'water' | 'normal'): st
 };
 
 export const ResistivityChart = ({ measurements, aValue }: ResistivityChartProps) => {
-  const [showChart, setShowChart] = useState(false);
 
   const chartData = useMemo<DataPoint[]>(() => {
     return measurements.map((m, index) => {
@@ -75,25 +73,13 @@ export const ResistivityChart = ({ measurements, aValue }: ResistivityChartProps
   return (
     <Card className="glass-card mt-4">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Analyse de Résistivité
-          </CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setShowChart(!showChart)}
-            className="gap-2"
-          >
-            {showChart ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            {showChart ? 'Masquer' : 'Afficher'}
-          </Button>
-        </div>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          Analyse de Résistivité
+        </CardTitle>
       </CardHeader>
       
-      {showChart && (
-        <CardContent className="pt-4">
+      <CardContent className="pt-4">
           {/* Statistics Summary */}
           <div className="flex flex-wrap gap-2 mb-4">
             <Badge variant="outline" className="border-red-500/50 text-red-500">
@@ -227,7 +213,6 @@ export const ResistivityChart = ({ measurements, aValue }: ResistivityChartProps
             </table>
           </div>
         </CardContent>
-      )}
     </Card>
   );
 };
