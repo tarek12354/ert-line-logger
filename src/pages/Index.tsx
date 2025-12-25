@@ -4,6 +4,7 @@ import { useBluetooth } from '@/hooks/useBluetooth';
 import { StatusIndicator } from '@/components/StatusIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
+import { ResistivityChart } from '@/components/ResistivityChart';
 import { toast } from 'sonner';
 import { Zap, AlertTriangle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -158,6 +159,9 @@ const Index = () => {
 
         {/* Measurements */}
         <MeasurementPanel measurements={measurements} />
+
+        {/* Resistivity Analysis Chart */}
+        <ResistivityChart measurements={measurements} aValue={aValue} />
 
         {/* Footer */}
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
