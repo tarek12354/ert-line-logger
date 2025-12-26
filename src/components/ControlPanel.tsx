@@ -118,9 +118,10 @@ export const ControlPanel = ({
         </Button>
 
         <Button
+          type="button"
           variant="control"
           className="col-span-2"
-          onClick={onExport}
+          onClick={() => onExport()}
           disabled={!hasMeasurements}
         >
           <Download className="h-4 w-4" />
@@ -128,9 +129,10 @@ export const ControlPanel = ({
         </Button>
 
         <Button
+          type="button"
           variant="secondary"
           className="col-span-2"
-          onClick={onAnalyse}
+          onClick={() => onAnalyse()}
           disabled={!hasMeasurements}
         >
           <BarChart3 className="h-4 w-4" />
@@ -138,9 +140,10 @@ export const ControlPanel = ({
         </Button>
 
         <Button
+          type="button"
           variant="outline"
           className="col-span-2"
-          onClick={onExportKML}
+          onClick={() => onExportKML()}
           disabled={!hasMeasurements || !hasGpsData}
         >
           <Globe className="h-4 w-4" />
