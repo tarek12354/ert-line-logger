@@ -1,19 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBluetooth } from '@/hooks/useBluetooth';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { StatusIndicator } from '@/components/StatusIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
+import { exportToCSV, exportToKML } from '@/utils/exportUtils';
+import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
 import { Zap, AlertTriangle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const navigate = useNavigate();
-  const [measurements, setMeasurements] = useState<string[]>([]);
+  const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
   const [aValue, setAValue] = useState(5.0);
   const [showChart, setShowChart] = useState(false);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [pendingGpsCapture, setPendingGpsCapture] = useState(false);
 
   const {
     isConnected,
@@ -28,13 +33,39 @@ const Index = () => {
     setOnDataCallback,
   } = useBluetooth();
 
-  const handleData = useCallback((data: string) => {
+  const { getCurrentPosition, error: gpsError } = useGeolocation();
+
+  const handleData = useCallback(async (data: string) => {
     const line = data.trim();
     if (line) {
-      setMeasurements(prev => [...prev, line]);
-      toast.success(`Mesure #${measurements.length + 1} reçue`);
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      // If GPS capture was pending (from NEXT command), get coordinates
+      if (pendingGpsCapture && gpsEnabled) {
+        const position = await getCurrentPosition();
+        if (position) {
+          latitude = position.latitude;
+          longitude = position.longitude;
+        }
+        setPendingGpsCapture(false);
+      }
+
+      const newMeasurement: MeasurementData = {
+        value: line,
+        latitude,
+        longitude,
+        timestamp: Date.now(),
+      };
+
+      setMeasurements(prev => [...prev, newMeasurement]);
+      
+      const gpsInfo = latitude && longitude 
+        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+        : '';
+      toast.success(`Mesure #${measurements.length + 1} reçue${gpsInfo}`);
     }
-  }, [measurements.length]);
+  }, [measurements.length, gpsEnabled, pendingGpsCapture, getCurrentPosition]);
 
   useEffect(() => {
     setOnDataCallback(handleData);
@@ -45,6 +76,12 @@ const Index = () => {
       toast.error(error);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (gpsError) {
+      toast.error(gpsError);
+    }
+  }, [gpsError]);
 
   const handleConnect = async () => {
     const success = await connect();
@@ -67,30 +104,30 @@ const Index = () => {
   };
 
   const handleNextMeasure = async () => {
+    // Set flag to capture GPS when data is received
+    if (gpsEnabled) {
+      setPendingGpsCapture(true);
+    }
     await send('NEXT');
     toast.info('Commande NEXT envoyée');
   };
 
   const handleExport = () => {
-    const content = [
-      'ERT LINE',
-      String(aValue),
-      String(measurements.length),
-      ...measurements.map(m => m.replace(',', ' ')),
-    ].join('\n');
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ert_line_${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    toast.success(`Fichier exporté (${measurements.length} mesures)`);
+    exportToCSV(measurements, aValue);
+    toast.success(`Fichier CSV exporté (${measurements.length} mesures)`);
   };
+
+  const handleExportKML = () => {
+    const hasGps = measurements.some(m => m.latitude !== null && m.longitude !== null);
+    if (!hasGps) {
+      toast.error('Aucune donnée GPS disponible pour l\'export KML');
+      return;
+    }
+    exportToKML(measurements, aValue);
+    toast.success('Fichier KML exporté pour Google Earth');
+  };
+
+  const hasGpsData = measurements.some(m => m.latitude !== null && m.longitude !== null);
 
   return (
     <div className="min-h-screen bg-background bg-grid">
@@ -155,13 +192,17 @@ const Index = () => {
             onStartLine={handleStartLine}
             onNextMeasure={handleNextMeasure}
             onExport={handleExport}
+            onExportKML={handleExportKML}
             onAnalyse={() => setShowChart(!showChart)}
             hasMeasurements={measurements.length > 0}
+            gpsEnabled={gpsEnabled}
+            onGpsToggle={setGpsEnabled}
+            hasGpsData={hasGpsData}
           />
         </div>
 
         {/* Measurements */}
-        <MeasurementPanel measurements={measurements} />
+        <MeasurementPanel measurements={measurements.map(m => m.value)} />
 
         {/* Resistivity Analysis Chart */}
         {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
