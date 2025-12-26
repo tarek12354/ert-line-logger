@@ -74,7 +74,6 @@ export const ControlPanel = ({
           value={aValue}
           onChange={(e) => setAValue(e.target.value)}
           className="font-mono bg-background border-border"
-          disabled={!isConnected}
         />
       </div>
 
