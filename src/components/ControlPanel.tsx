@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Play, SkipForward, Download, Bluetooth, Power, BarChart3 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Play, SkipForward, Download, Bluetooth, Power, BarChart3, MapPin, Globe } from 'lucide-react';
 
 interface ControlPanelProps {
   isConnected: boolean;
@@ -12,8 +13,12 @@ interface ControlPanelProps {
   onStartLine: (a: number) => void;
   onNextMeasure: () => void;
   onExport: () => void;
+  onExportKML: () => void;
   onAnalyse: () => void;
   hasMeasurements: boolean;
+  gpsEnabled: boolean;
+  onGpsToggle: (enabled: boolean) => void;
+  hasGpsData: boolean;
 }
 
 export const ControlPanel = ({
@@ -24,8 +29,12 @@ export const ControlPanel = ({
   onStartLine,
   onNextMeasure,
   onExport,
+  onExportKML,
   onAnalyse,
   hasMeasurements,
+  gpsEnabled,
+  onGpsToggle,
+  hasGpsData,
 }: ControlPanelProps) => {
   const [aValue, setAValue] = useState('5.0');
 
@@ -38,6 +47,21 @@ export const ControlPanel = ({
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+      {/* GPS Toggle */}
+      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+        <div className="flex items-center gap-2">
+          <MapPin className={`h-4 w-4 ${gpsEnabled ? 'text-green-500' : 'text-muted-foreground'}`} />
+          <Label htmlFor="gps-toggle" className="text-sm font-medium cursor-pointer">
+            📍 GPS
+          </Label>
+        </div>
+        <Switch
+          id="gps-toggle"
+          checked={gpsEnabled}
+          onCheckedChange={onGpsToggle}
+        />
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="a-value" className="text-sm text-muted-foreground">
           Espacement (a) en mètres
@@ -98,9 +122,10 @@ export const ControlPanel = ({
           variant="control"
           className="col-span-2"
           onClick={onExport}
+          disabled={!hasMeasurements}
         >
           <Download className="h-4 w-4" />
-          Exporter fichier
+          Exporter CSV
         </Button>
 
         <Button
@@ -111,6 +136,16 @@ export const ControlPanel = ({
         >
           <BarChart3 className="h-4 w-4" />
           📊 Analyse
+        </Button>
+
+        <Button
+          variant="outline"
+          className="col-span-2"
+          onClick={onExportKML}
+          disabled={!hasMeasurements || !hasGpsData}
+        >
+          <Globe className="h-4 w-4" />
+          Exporter KML
         </Button>
       </div>
     </div>
