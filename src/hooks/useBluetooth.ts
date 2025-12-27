@@ -73,8 +73,12 @@ export const useBluetooth = () => {
           SERVICE_UUID,
           CHARACTERISTIC_UUID,
           (value) => {
-            const data = new TextDecoder().decode(value);
-            if (onDataCallbackRef.current) onDataCallbackRef.current(data);
+            const rawData = new TextDecoder().decode(value);
+            console.log('[BLE RAW DATA]:', rawData);
+            // Immediately invoke callback for real-time updates
+            if (onDataCallbackRef.current) {
+              onDataCallbackRef.current(rawData);
+            }
           }
         );
 

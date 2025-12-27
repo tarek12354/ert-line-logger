@@ -38,46 +38,56 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Handle incoming Bluetooth data - update live value continuously
+  // Handle incoming Bluetooth data - update live value continuously in REAL-TIME
   const handleData = useCallback(async (data: string) => {
     const line = data.trim();
-    if (line) {
-      // Extract only the last value (Resistance R) from comma-separated data
-      const parts = line.split(',');
-      const resistanceValue = parts[parts.length - 1]?.trim() || line;
-      
-      // Always update live value for real-time display
-      setLiveValue(resistanceValue);
+    if (!line) return;
+    
+    // Debug: Log raw incoming data
+    console.log('[LIVE DATA RAW]:', line);
+    
+    // Extract only the last value (Resistance R) from comma-separated data
+    const parts = line.split(',');
+    const lastPart = parts[parts.length - 1]?.trim();
+    const resistanceValue = parseFloat(lastPart || '0');
+    
+    // Debug: Log parsed value
+    console.log('[LIVE DATA PARSED]:', { parts, lastPart, resistanceValue });
+    
+    // Format for display (keep 2 decimal places)
+    const displayValue = isNaN(resistanceValue) ? lastPart || line : resistanceValue.toFixed(2);
+    
+    // IMMEDIATELY update live value state for real-time UI updates
+    setLiveValue(displayValue);
 
-      // Only save to measurements if "Suivante" was pressed
-      if (pendingSaveRef.current) {
-        let latitude: number | null = null;
-        let longitude: number | null = null;
+    // Only save to measurements if "Suivante" was pressed
+    if (pendingSaveRef.current) {
+      let latitude: number | null = null;
+      let longitude: number | null = null;
 
-        if (gpsEnabled) {
-          const position = await getCurrentPosition();
-          if (position) {
-            latitude = position.latitude;
-            longitude = position.longitude;
-          }
+      if (gpsEnabled) {
+        const position = await getCurrentPosition();
+        if (position) {
+          latitude = position.latitude;
+          longitude = position.longitude;
         }
-
-        const newMeasurement: MeasurementData = {
-          value: resistanceValue,
-          latitude,
-          longitude,
-          timestamp: Date.now(),
-        };
-
-        setMeasurements(prev => [...prev, newMeasurement]);
-        
-        const gpsInfo = latitude && longitude 
-          ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
-          : '';
-        toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
-        
-        pendingSaveRef.current = false;
       }
+
+      const newMeasurement: MeasurementData = {
+        value: displayValue,
+        latitude,
+        longitude,
+        timestamp: Date.now(),
+      };
+
+      setMeasurements(prev => [...prev, newMeasurement]);
+      
+      const gpsInfo = latitude && longitude 
+        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+        : '';
+      toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
+      
+      pendingSaveRef.current = false;
     }
   }, [measurements.length, gpsEnabled, getCurrentPosition]);
 
