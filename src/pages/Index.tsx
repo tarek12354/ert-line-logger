@@ -38,12 +38,16 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Handle incoming Bluetooth data - update live value
+  // Handle incoming Bluetooth data - update live value continuously
   const handleData = useCallback(async (data: string) => {
     const line = data.trim();
     if (line) {
+      // Extract only the last value (Resistance R) from comma-separated data
+      const parts = line.split(',');
+      const resistanceValue = parts[parts.length - 1]?.trim() || line;
+      
       // Always update live value for real-time display
-      setLiveValue(line);
+      setLiveValue(resistanceValue);
 
       // Only save to measurements if "Suivante" was pressed
       if (pendingSaveRef.current) {
@@ -59,7 +63,7 @@ const Index = () => {
         }
 
         const newMeasurement: MeasurementData = {
-          value: line,
+          value: resistanceValue,
           latitude,
           longitude,
           timestamp: Date.now(),
