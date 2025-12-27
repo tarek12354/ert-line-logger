@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBluetooth } from '@/hooks/useBluetooth';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -6,6 +6,7 @@ import { StatusIndicator } from '@/components/StatusIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
+import { LiveMonitor } from '@/components/LiveMonitor';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
@@ -18,7 +19,9 @@ const Index = () => {
   const [aValue, setAValue] = useState(5.0);
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
-  const [pendingGpsCapture, setPendingGpsCapture] = useState(false);
+  const [liveValue, setLiveValue] = useState<string | null>(null);
+  
+  const pendingSaveRef = useRef(false);
 
   const {
     isConnected,
@@ -35,37 +38,44 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
+  // Handle incoming Bluetooth data - update live value
   const handleData = useCallback(async (data: string) => {
     const line = data.trim();
     if (line) {
-      let latitude: number | null = null;
-      let longitude: number | null = null;
+      // Always update live value for real-time display
+      setLiveValue(line);
 
-      // If GPS capture was pending (from NEXT command), get coordinates
-      if (pendingGpsCapture && gpsEnabled) {
-        const position = await getCurrentPosition();
-        if (position) {
-          latitude = position.latitude;
-          longitude = position.longitude;
+      // Only save to measurements if "Suivante" was pressed
+      if (pendingSaveRef.current) {
+        let latitude: number | null = null;
+        let longitude: number | null = null;
+
+        if (gpsEnabled) {
+          const position = await getCurrentPosition();
+          if (position) {
+            latitude = position.latitude;
+            longitude = position.longitude;
+          }
         }
-        setPendingGpsCapture(false);
+
+        const newMeasurement: MeasurementData = {
+          value: line,
+          latitude,
+          longitude,
+          timestamp: Date.now(),
+        };
+
+        setMeasurements(prev => [...prev, newMeasurement]);
+        
+        const gpsInfo = latitude && longitude 
+          ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+          : '';
+        toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
+        
+        pendingSaveRef.current = false;
       }
-
-      const newMeasurement: MeasurementData = {
-        value: line,
-        latitude,
-        longitude,
-        timestamp: Date.now(),
-      };
-
-      setMeasurements(prev => [...prev, newMeasurement]);
-      
-      const gpsInfo = latitude && longitude 
-        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
-        : '';
-      toast.success(`Mesure #${measurements.length + 1} reçue${gpsInfo}`);
     }
-  }, [measurements.length, gpsEnabled, pendingGpsCapture, getCurrentPosition]);
+  }, [measurements.length, gpsEnabled, getCurrentPosition]);
 
   useEffect(() => {
     setOnDataCallback(handleData);
@@ -97,6 +107,7 @@ const Index = () => {
 
   const handleStartLine = async (a: number) => {
     setMeasurements([]);
+    setLiveValue(null);
     setAValue(a);
     await send(`A=${a}`);
     await send('RESET');
@@ -104,12 +115,38 @@ const Index = () => {
   };
 
   const handleNextMeasure = async () => {
-    // Set flag to capture GPS when data is received
-    if (gpsEnabled) {
-      setPendingGpsCapture(true);
+    // If we have a live value, save it immediately
+    if (liveValue) {
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      if (gpsEnabled) {
+        const position = await getCurrentPosition();
+        if (position) {
+          latitude = position.latitude;
+          longitude = position.longitude;
+        }
+      }
+
+      const newMeasurement: MeasurementData = {
+        value: liveValue,
+        latitude,
+        longitude,
+        timestamp: Date.now(),
+      };
+
+      setMeasurements(prev => [...prev, newMeasurement]);
+      
+      const gpsInfo = latitude && longitude 
+        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+        : '';
+      toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
+    } else {
+      // No live value yet, set flag to save next incoming data
+      pendingSaveRef.current = true;
+      await send('NEXT');
+      toast.info('En attente de données...');
     }
-    await send('NEXT');
-    toast.info('Commande NEXT envoyée');
   };
 
   const handleExport = () => {
@@ -201,7 +238,10 @@ const Index = () => {
           />
         </div>
 
-        {/* Measurements */}
+        {/* Live Monitoring */}
+        <LiveMonitor liveValue={liveValue} isConnected={isConnected} />
+
+        {/* Saved Measurements */}
         <MeasurementPanel measurements={measurements.map(m => m.value)} />
 
         {/* Resistivity Analysis Chart */}
