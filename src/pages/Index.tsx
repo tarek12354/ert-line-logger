@@ -20,8 +20,20 @@ const Index = () => {
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [liveValue, setLiveValue] = useState<string | null>(null);
+  const [rawBluetoothData, setRawBluetoothData] = useState<string>('');
   
   const pendingSaveRef = useRef(false);
+  const measurementsRef = useRef<MeasurementData[]>([]);
+  const gpsEnabledRef = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    measurementsRef.current = measurements;
+  }, [measurements]);
+
+  useEffect(() => {
+    gpsEnabledRef.current = gpsEnabled;
+  }, [gpsEnabled]);
 
   const {
     isConnected,
@@ -38,34 +50,41 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Handle incoming Bluetooth data - update live value continuously in REAL-TIME
+  // Handle incoming Bluetooth data - HIGHEST PRIORITY REAL-TIME UPDATE
   const handleData = useCallback(async (data: string) => {
     const line = data.trim();
     if (!line) return;
     
-    // Debug: Log raw incoming data
-    console.log('[LIVE DATA RAW]:', line);
+    // PRIORITY 1: Update raw data debug immediately
+    setRawBluetoothData(line);
+    console.log('[BLE CALLBACK TRIGGERED] Raw:', line);
     
-    // Extract only the last value (Resistance R) from comma-separated data
+    // PRIORITY 2: Parse and extract last value (Resistance R)
     const parts = line.split(',');
     const lastPart = parts[parts.length - 1]?.trim();
     const resistanceValue = parseFloat(lastPart || '0');
     
-    // Debug: Log parsed value
-    console.log('[LIVE DATA PARSED]:', { parts, lastPart, resistanceValue });
+    console.log('[LIVE DATA PARSED]:', { 
+      partsCount: parts.length, 
+      lastPart, 
+      resistanceValue,
+      isNaN: isNaN(resistanceValue) 
+    });
     
-    // Format for display (keep 2 decimal places)
-    const displayValue = isNaN(resistanceValue) ? lastPart || line : resistanceValue.toFixed(2);
-    
-    // IMMEDIATELY update live value state for real-time UI updates
-    setLiveValue(displayValue);
+    // PRIORITY 3: Update live value IMMEDIATELY - no conditions
+    if (!isNaN(resistanceValue)) {
+      setLiveValue(resistanceValue.toFixed(2));
+    } else if (lastPart) {
+      setLiveValue(lastPart);
+    }
 
     // Only save to measurements if "Suivante" was pressed
     if (pendingSaveRef.current) {
+      const displayValue = !isNaN(resistanceValue) ? resistanceValue.toFixed(2) : lastPart || line;
       let latitude: number | null = null;
       let longitude: number | null = null;
 
-      if (gpsEnabled) {
+      if (gpsEnabledRef.current) {
         const position = await getCurrentPosition();
         if (position) {
           latitude = position.latitude;
@@ -85,13 +104,15 @@ const Index = () => {
       const gpsInfo = latitude && longitude 
         ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
         : '';
-      toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
+      toast.success(`Mesure #${measurementsRef.current.length + 1} enregistrée${gpsInfo}`);
       
       pendingSaveRef.current = false;
     }
-  }, [measurements.length, gpsEnabled, getCurrentPosition]);
+  }, [getCurrentPosition]);
 
+  // Set callback ONCE on mount and keep it updated
   useEffect(() => {
+    console.log('[SETTING BLE CALLBACK]');
     setOnDataCallback(handleData);
   }, [handleData, setOnDataCallback]);
 
@@ -260,6 +281,15 @@ const Index = () => {
 
         {/* Resistivity Analysis Chart */}
         {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
+
+        {/* Raw Bluetooth Data Debug */}
+        {isConnected && (
+          <div className="glass-card rounded-lg p-2 mb-2 border border-muted/30">
+            <p className="text-xs text-muted-foreground font-mono">
+              <span className="text-primary">Raw BLE:</span> {rawBluetoothData || 'No data yet'}
+            </p>
+          </div>
+        )}
 
         {/* Footer */}
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
