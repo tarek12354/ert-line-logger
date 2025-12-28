@@ -26,7 +26,8 @@ export const useBluetooth = () => {
   });
 
   const onDataCallbackRef = useRef<((data: string) => void) | null>(null);
-  const [lastReceivedData, setLastReceivedData] = useState<string | null>(null);
+  const [rawBluetoothData, setRawBluetoothData] = useState<string>('');
+  const [liveValue, setLiveValue] = useState<number | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -75,15 +76,17 @@ export const useBluetooth = () => {
           SERVICE_UUID,
           CHARACTERISTIC_UUID,
           (value) => {
-            const rawData = new TextDecoder().decode(value);
-            console.log('[BLE NOTIFICATION RECEIVED]:', rawData);
-            
-            // Update state directly for reactive UI
-            setLastReceivedData(rawData);
-            
-            // Also call callback if set
+            const rawString = new TextDecoder().decode(value);
+            console.log('[BLE NOTIFICATION RECEIVED]:', rawString);
+
+            // Highest priority: reactive live value for UI
+            setRawBluetoothData(rawString);
+            const val = parseFloat(rawString.split(',').pop() ?? '');
+            if (!Number.isNaN(val)) setLiveValue(val);
+
+            // Secondary: forward raw packets to consumers (e.g., saving to table)
             if (onDataCallbackRef.current) {
-              onDataCallbackRef.current(rawData);
+              onDataCallbackRef.current(rawString);
             }
           }
         );
@@ -134,5 +137,5 @@ export const useBluetooth = () => {
   // Check Web Bluetooth support for browsers
   const isSupported = isNative || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
 
-  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, lastReceivedData };
+  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, rawBluetoothData, liveValue };
 };

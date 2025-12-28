@@ -19,21 +19,8 @@ const Index = () => {
   const [aValue, setAValue] = useState(5.0);
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
-  const [liveValue, setLiveValue] = useState<string | null>(null);
-  const [rawBluetoothData, setRawBluetoothData] = useState<string>('');
-  
+
   const pendingSaveRef = useRef(false);
-  const measurementsRef = useRef<MeasurementData[]>([]);
-  const gpsEnabledRef = useRef(false);
-
-  // Keep refs in sync with state
-  useEffect(() => {
-    measurementsRef.current = measurements;
-  }, [measurements]);
-
-  useEffect(() => {
-    gpsEnabledRef.current = gpsEnabled;
-  }, [gpsEnabled]);
 
   const {
     isConnected,
@@ -46,51 +33,25 @@ const Index = () => {
     disconnect,
     send,
     setOnDataCallback,
-    lastReceivedData,
+    rawBluetoothData,
+    liveValue,
   } = useBluetooth();
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // REACTIVE: Update live value whenever lastReceivedData changes
-  useEffect(() => {
-    if (!lastReceivedData) return;
-    
-    const line = lastReceivedData.trim();
-    if (!line) return;
-    
-    // Update raw debug display
-    setRawBluetoothData(line);
-    console.log('[REACTIVE UPDATE] Raw:', line);
-    
-    // Parse: split by comma, take last value
-    const parts = line.split(',');
-    const lastPart = parts[parts.length - 1]?.trim();
-    const resistanceValue = parseFloat(lastPart || '0');
-    
-    console.log('[PARSED]:', { parts: parts.length, lastPart, value: resistanceValue });
-    
-    // Update live value state - forces re-render
-    if (!isNaN(resistanceValue)) {
-      setLiveValue(resistanceValue.toFixed(2));
-    } else if (lastPart) {
-      setLiveValue(lastPart);
-    }
-  }, [lastReceivedData]);
 
   // Handle saving measurement when "Suivante" is pressed
   const handleSaveFromCallback = useCallback(async (data: string) => {
     if (!pendingSaveRef.current) return;
-    
-    const line = data.trim();
-    const parts = line.split(',');
-    const lastPart = parts[parts.length - 1]?.trim();
-    const resistanceValue = parseFloat(lastPart || '0');
-    const displayValue = !isNaN(resistanceValue) ? resistanceValue.toFixed(2) : lastPart || line;
-    
+
+    const raw = data.trim();
+    const val = parseFloat(raw.split(',').pop() ?? '');
+    const displayValue = !Number.isNaN(val) ? val.toFixed(2) : raw;
+
     let latitude: number | null = null;
     let longitude: number | null = null;
 
-    if (gpsEnabledRef.current) {
+    if (gpsEnabled) {
       const position = await getCurrentPosition();
       if (position) {
         latitude = position.latitude;
@@ -106,14 +67,14 @@ const Index = () => {
     };
 
     setMeasurements(prev => [...prev, newMeasurement]);
-    
-    const gpsInfo = latitude && longitude 
-      ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+
+    const gpsInfo = latitude && longitude
+      ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
       : '';
-    toast.success(`Mesure #${measurementsRef.current.length + 1} enregistrée${gpsInfo}`);
-    
+    toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
+
     pendingSaveRef.current = false;
-  }, [getCurrentPosition]);
+  }, [getCurrentPosition, gpsEnabled, measurements.length]);
 
   // Set callback for pending saves
   useEffect(() => {
@@ -146,7 +107,6 @@ const Index = () => {
 
   const handleStartLine = async (a: number) => {
     setMeasurements([]);
-    setLiveValue(null);
     setAValue(a);
     await send(`A=${a}`);
     await send('RESET');
@@ -155,7 +115,7 @@ const Index = () => {
 
   const handleNextMeasure = async () => {
     // If we have a live value, save it immediately
-    if (liveValue) {
+    if (liveValue !== null && !Number.isNaN(liveValue)) {
       let latitude: number | null = null;
       let longitude: number | null = null;
 
@@ -168,16 +128,16 @@ const Index = () => {
       }
 
       const newMeasurement: MeasurementData = {
-        value: liveValue,
+        value: liveValue.toFixed(2),
         latitude,
         longitude,
         timestamp: Date.now(),
       };
 
       setMeasurements(prev => [...prev, newMeasurement]);
-      
-      const gpsInfo = latitude && longitude 
-        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+
+      const gpsInfo = latitude && longitude
+        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
         : '';
       toast.success(`Mesure #${measurements.length + 1} enregistrée${gpsInfo}`);
     } else {
@@ -278,7 +238,7 @@ const Index = () => {
         </div>
 
         {/* Live Monitoring */}
-        <LiveMonitor liveValue={liveValue} isConnected={isConnected} />
+        <LiveMonitor liveValue={liveValue !== null && !Number.isNaN(liveValue) ? liveValue.toFixed(2) : null} isConnected={isConnected} />
 
         {/* Saved Measurements */}
         <MeasurementPanel measurements={measurements.map(m => m.value)} />
