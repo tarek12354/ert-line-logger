@@ -46,75 +46,79 @@ const Index = () => {
     disconnect,
     send,
     setOnDataCallback,
+    lastReceivedData,
   } = useBluetooth();
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Handle incoming Bluetooth data - HIGHEST PRIORITY REAL-TIME UPDATE
-  const handleData = useCallback(async (data: string) => {
-    const line = data.trim();
+  // REACTIVE: Update live value whenever lastReceivedData changes
+  useEffect(() => {
+    if (!lastReceivedData) return;
+    
+    const line = lastReceivedData.trim();
     if (!line) return;
     
-    // PRIORITY 1: Update raw data debug immediately
+    // Update raw debug display
     setRawBluetoothData(line);
-    console.log('[BLE CALLBACK TRIGGERED] Raw:', line);
+    console.log('[REACTIVE UPDATE] Raw:', line);
     
-    // PRIORITY 2: Parse and extract last value (Resistance R)
+    // Parse: split by comma, take last value
     const parts = line.split(',');
     const lastPart = parts[parts.length - 1]?.trim();
     const resistanceValue = parseFloat(lastPart || '0');
     
-    console.log('[LIVE DATA PARSED]:', { 
-      partsCount: parts.length, 
-      lastPart, 
-      resistanceValue,
-      isNaN: isNaN(resistanceValue) 
-    });
+    console.log('[PARSED]:', { parts: parts.length, lastPart, value: resistanceValue });
     
-    // PRIORITY 3: Update live value IMMEDIATELY - no conditions
+    // Update live value state - forces re-render
     if (!isNaN(resistanceValue)) {
       setLiveValue(resistanceValue.toFixed(2));
     } else if (lastPart) {
       setLiveValue(lastPart);
     }
+  }, [lastReceivedData]);
 
-    // Only save to measurements if "Suivante" was pressed
-    if (pendingSaveRef.current) {
-      const displayValue = !isNaN(resistanceValue) ? resistanceValue.toFixed(2) : lastPart || line;
-      let latitude: number | null = null;
-      let longitude: number | null = null;
+  // Handle saving measurement when "Suivante" is pressed
+  const handleSaveFromCallback = useCallback(async (data: string) => {
+    if (!pendingSaveRef.current) return;
+    
+    const line = data.trim();
+    const parts = line.split(',');
+    const lastPart = parts[parts.length - 1]?.trim();
+    const resistanceValue = parseFloat(lastPart || '0');
+    const displayValue = !isNaN(resistanceValue) ? resistanceValue.toFixed(2) : lastPart || line;
+    
+    let latitude: number | null = null;
+    let longitude: number | null = null;
 
-      if (gpsEnabledRef.current) {
-        const position = await getCurrentPosition();
-        if (position) {
-          latitude = position.latitude;
-          longitude = position.longitude;
-        }
+    if (gpsEnabledRef.current) {
+      const position = await getCurrentPosition();
+      if (position) {
+        latitude = position.latitude;
+        longitude = position.longitude;
       }
-
-      const newMeasurement: MeasurementData = {
-        value: displayValue,
-        latitude,
-        longitude,
-        timestamp: Date.now(),
-      };
-
-      setMeasurements(prev => [...prev, newMeasurement]);
-      
-      const gpsInfo = latitude && longitude 
-        ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
-        : '';
-      toast.success(`Mesure #${measurementsRef.current.length + 1} enregistrée${gpsInfo}`);
-      
-      pendingSaveRef.current = false;
     }
+
+    const newMeasurement: MeasurementData = {
+      value: displayValue,
+      latitude,
+      longitude,
+      timestamp: Date.now(),
+    };
+
+    setMeasurements(prev => [...prev, newMeasurement]);
+    
+    const gpsInfo = latitude && longitude 
+      ? ` (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+      : '';
+    toast.success(`Mesure #${measurementsRef.current.length + 1} enregistrée${gpsInfo}`);
+    
+    pendingSaveRef.current = false;
   }, [getCurrentPosition]);
 
-  // Set callback ONCE on mount and keep it updated
+  // Set callback for pending saves
   useEffect(() => {
-    console.log('[SETTING BLE CALLBACK]');
-    setOnDataCallback(handleData);
-  }, [handleData, setOnDataCallback]);
+    setOnDataCallback(handleSaveFromCallback);
+  }, [handleSaveFromCallback, setOnDataCallback]);
 
   useEffect(() => {
     if (error) {
