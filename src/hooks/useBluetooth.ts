@@ -26,6 +26,7 @@ export const useBluetooth = () => {
   });
 
   const onDataCallbackRef = useRef<((data: string) => void) | null>(null);
+  const [lastReceivedData, setLastReceivedData] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -68,14 +69,19 @@ export const useBluetooth = () => {
           setState(prev => ({ ...prev, isConnected: false, deviceName: null }));
         });
 
+        // CRITICAL: Start notifications IMMEDIATELY after connect
         await BleClient.startNotifications(
           device.deviceId,
           SERVICE_UUID,
           CHARACTERISTIC_UUID,
           (value) => {
             const rawData = new TextDecoder().decode(value);
-            console.log('[BLE RAW DATA]:', rawData);
-            // Immediately invoke callback for real-time updates
+            console.log('[BLE NOTIFICATION RECEIVED]:', rawData);
+            
+            // Update state directly for reactive UI
+            setLastReceivedData(rawData);
+            
+            // Also call callback if set
             if (onDataCallbackRef.current) {
               onDataCallbackRef.current(rawData);
             }
@@ -128,5 +134,5 @@ export const useBluetooth = () => {
   // Check Web Bluetooth support for browsers
   const isSupported = isNative || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
 
-  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions };
+  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, lastReceivedData };
 };
