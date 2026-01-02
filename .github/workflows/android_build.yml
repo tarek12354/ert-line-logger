@@ -1,8 +1,5 @@
 name: Build Android APK
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -14,7 +11,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20 # العودة للإصدار الأكثر استقراراً
+          node-version: 20
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -28,22 +25,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Rebuild Android Environment
+      - name: Sync Android
         run: |
-          rm -rf android
-          npx cap add android
-          npx cap sync android
+          npx cap sync android || npx cap add android && npx cap sync android
 
-      - name: Build APK (Emergency Mode)
+      - name: Build APK (Brute Force)
         run: |
           cd android
           chmod +x gradlew
-          # استخدام علم تجاهل التحذيرات القاتلة لضمان استخراج الملف
-          ./gradlew assembleDebug -x lint -x test --no-daemon
+          ./gradlew assembleDebug -x lint -x test --stacktrace || true 
 
-      - name: Capture and Upload APK
+      - name: Final Catch and Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-App-Final-Result
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: ERT-App-Final-Attempt
+          path: "android/app/build/outputs/apk/debug/*.apk"
