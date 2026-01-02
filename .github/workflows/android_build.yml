@@ -18,12 +18,11 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install
-          npm install @capacitor/android @capacitor/cli
+          # تثبيت المكتبات التي يشتكي منها GitHub يدوياً
+          npm install @ionic/react ionicons @ionic/react-router
 
       - name: Build Web Project
-        run: |
-          # بناء ملفات الويب وضمان وجود مجلد dist أو build
-          npm run build
+        run: npm run build
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -35,14 +34,7 @@ jobs:
         run: |
           rm -rf android
           npx cap add android
-          # تحديث ملف capacitor.config.json لضمان القراءة من المجلد الصحيح
           npx cap sync android
-
-      - name: Inject Bluetooth Permissions
-        run: |
-          FILE="android/app/src/main/AndroidManifest.xml"
-          PERMISSIONS='<uses-permission android:name="android.permission.BLUETOOTH" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
-          sed -i "/<manifest/a $PERMISSIONS" $FILE
 
       - name: Build APK with Gradle
         run: |
@@ -53,5 +45,5 @@ jobs:
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-Native-Bluetooth-App
+          name: ERT-Professional-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
