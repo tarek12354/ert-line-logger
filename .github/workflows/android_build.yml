@@ -30,17 +30,18 @@ jobs:
 
       - name: Reconstruct Android Project
         run: |
-          # حذف أي مجلد أندرويد قديم وبناؤه من الصفر لضمان سلامة الملفات
+          # تنظيف وبناء المنصة من جديد لضمان وجود كل الملفات
           rm -rf android
           npx cap add android
           npx cap sync android
+          npx cap update android
 
       - name: Build APK with Gradle
         run: |
           cd android
-          # إعطاء صلاحية التنفيذ للملف الذي تم إنشاؤه للتو
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # استخدام أمر التجميع مع تجاهل التحذيرات البسيطة
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
