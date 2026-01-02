@@ -34,17 +34,19 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Build APK (Final Attempt)
+      - name: Build APK (Final Production)
         run: |
           cd android
           chmod +x gradlew
-          # أضفنا --continue لتجاهل المشاكل غير الحرجة واستكمال البناء
-          ./gradlew assembleDebug -x lint --no-daemon --continue || true
+          ./gradlew assembleDebug -x lint --no-daemon
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-App-Latest
-          # هذا المسار سيبحث عن أي ملف apk تم إنتاجه حتى لو فشلت المهمة السابقة
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: ERT-App-Final
+          # بحث شامل في كل مجلدات أندرويد عن أي ملف APK
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/*.apk
+            android/build/outputs/apk/debug/*.apk
           if-no-files-found: error
