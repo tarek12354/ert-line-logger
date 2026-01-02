@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # هذا السطر يسمح لك بتشغيل البناء يدوياً
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,13 +14,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # تم الترقية إلى 22 لحل خطأ الصورة الأخيرة
 
       - name: Install Dependencies
         run: |
           npm install --force
-          # التأكد من وجود المكتبات الأساسية التي يطلبها الكود
-          npm install @ionic/react @ionic/react-router ionicons --force
+          npm install @capacitor/core @capacitor/cli @capacitor/android --force
 
       - name: Build Web Project
         run: npm run build
@@ -31,15 +30,14 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Initialize Android
+      - name: Initialize Android Platform
         run: |
-          # إضافة المنصة فقط إذا لم تكن موجودة لمنع الخطأ
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
+          # حذف المجلد القديم لضمان بناء نظيف 100%
+          rm -rf android
+          npx cap add android
           npx cap sync android
 
-      - name: Build APK
+      - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
