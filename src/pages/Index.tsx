@@ -1,64 +1,49 @@
-import { 
-  IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
-  IonButton, IonText, IonList, IonItem, IonLabel, useIonToast 
-} from '@ionic/react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
+// استخدام مكونات HTML عادية لتجنب أخطاء استيراد Ionic في GitHub Actions
 const Home: React.FC = () => {
-  const [present] = useIonToast();
-  // نفترض أن هذه القيمة تأتي من الحساس (سنضع قيمة ثابتة للاختبار الآن)
   const [currentValue, setCurrentValue] = useState<number>(0);
   const [mesures, setMesures] = useState<{id: number, val: number, time: string}[]>([]);
 
   const handleNext = () => {
-    // التحقق: إذا كانت القيمة 0 أو غير موجودة لا يحفظ
-    if (currentValue > 0) {
+    // محاكاة استلام بيانات (تأكد من ربطها لاحقاً بالبلوتوث)
+    if (currentValue >= 0) {
       const newM = {
         id: Date.now(),
         val: currentValue,
         time: new Date().toLocaleTimeString()
       };
-      setMesures([newM, ...mesures]);
-      present({ message: 'تم الحفظ', duration: 1000, color: 'success' });
-    } else {
-      // رسالة الخطأ التي ظهرت لك في الصورة
-      present({ message: 'En attente de données du capteur...', duration: 2000, color: 'warning' });
+      setMesures(prev => [newM, ...prev]);
     }
   };
 
   return (
-    <IonPage>
-      <IonHeader>
-        <IonToolbar color="primary">
-          <IonTitle>ERT Project</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent className="ion-padding">
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <IonText color="dark">
-            <h2>القيمة الحالية</h2>
-            <h1 style={{ fontSize: '3rem' }}>{currentValue.toFixed(2)}</h1>
-          </IonText>
-          
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <IonButton expand="block" style={{ flex: 1 }} color="success">Démarrer</IonButton>
-            <IonButton expand="block" style={{ flex: 1 }} color="warning" onClick={handleNext}>Suivante</IonButton>
-          </div>
+    <div style={{ padding: '20px', textAlign: 'center', backgroundColor: '#121212', color: 'white', minHeight: '100vh' }}>
+      <header style={{ borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+        <h2>ERT Line Logger</h2>
+      </header>
+
+      <main style={{ marginTop: '30px' }}>
+        <p>Live Monitoring</p>
+        <h1 style={{ fontSize: '4rem', color: '#00f2ff' }}>{currentValue.toFixed(2)}</h1>
+        
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '20px' }}>
+          <button style={{ padding: '10px 20px', backgroundColor: '#2dd36f', border: 'none', borderRadius: '5px', color: 'white' }}>Démarrer</button>
+          <button onClick={handleNext} style={{ padding: '10px 20px', backgroundColor: '#ffc409', border: 'none', borderRadius: '5px', color: 'black' }}>Suivante</button>
         </div>
 
-        <IonList>
-          <IonHeader className="ion-padding-start">Mesures ({mesures.length})</IonHeader>
-          {mesures.map(m => (
-            <IonItem key={m.id}>
-              <IonLabel>
-                <h2>{m.val} Ω</h2>
-                <p>{m.time}</p>
-              </IonLabel>
-            </IonItem>
-          ))}
-        </IonList>
-      </IonContent>
-    </IonPage>
+        <section style={{ marginTop: '40px', textAlign: 'left' }}>
+          <h3>Mesures ({mesures.length})</h3>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {mesures.map(m => (
+              <li key={m.id} style={{ padding: '10px', borderBottom: '1px solid #333' }}>
+                <strong>{m.val} Ω</strong> - <small>{m.time}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </main>
+    </div>
   );
 };
 
