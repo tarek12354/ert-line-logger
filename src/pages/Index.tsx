@@ -71,16 +71,13 @@ const Index = () => {
     toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
   };
 
-  // Suivante button: Capture real sensor value only
+  // Suivante button: Capture current sensor value instantly - no blocking
   const handleNextMeasure = async () => {
-    // Only allow saving real Bluetooth data
-    if (!isConnected) {
-      toast.warning('Connectez-vous au capteur ESP32 d\'abord');
-      return;
-    }
-
-    if (liveValue === null || liveValue === 0 || Number.isNaN(liveValue)) {
-      toast.warning('No sensor data - En attente de données du capteur');
+    // Get current value - use liveValue if available, otherwise show warning
+    const valueToSave = liveValue;
+    
+    if (valueToSave === null || Number.isNaN(valueToSave)) {
+      toast.warning('En attente de données BLE...');
       return;
     }
 
@@ -96,7 +93,7 @@ const Index = () => {
     }
 
     const newMeasurement: MeasurementData = {
-      value: liveValue.toFixed(2),
+      value: valueToSave.toFixed(2),
       latitude,
       longitude,
       timestamp: Date.now(),
@@ -105,9 +102,12 @@ const Index = () => {
     setMeasurements(prev => [...prev, newMeasurement]);
     
     const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
-    toast.success(`Mesure #${measurements.length + 1} enregistrée: ${liveValue.toFixed(2)} Ω${gpsInfo}`);
+    toast.success(`Mesure #${measurements.length + 1}: ${valueToSave.toFixed(2)} Ω${gpsInfo}`);
     
-    await send('NEXT');
+    // Send NEXT command to ESP32 if connected
+    if (isConnected) {
+      await send('NEXT');
+    }
   };
 
   // Export measurements list as simple CSV
