@@ -13,13 +13,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Install Dependencies
+      - name: Clean & Install Dependencies
         run: |
-          npm install
-          # تثبيت المكتبات التي يشتكي منها GitHub يدوياً
-          npm install @ionic/react ionicons @ionic/react-router
+          rm -rf node_modules package-lock.json
+          # استخدام --force هو المفتاح لتجاوز أخطاء eresolve التي ظهرت في صورك
+          npm install --force
+          npm install @ionic/react@latest ionicons@latest --force
 
       - name: Build Web Project
         run: npm run build
@@ -30,20 +31,15 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Force Rebuild Android Platform
+      - name: Build Android
         run: |
-          rm -rf android
-          npx cap add android
           npx cap sync android
-
-      - name: Build APK with Gradle
-        run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-Professional-App
+          name: ERT-Final-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
