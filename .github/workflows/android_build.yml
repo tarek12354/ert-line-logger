@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18 # إصدار مستقر جداً للبناء
+          node-version: 18
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -25,12 +25,11 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # حل مشكلة invalid source release
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Sync Capacitor Android
         run: |
-          # إذا لم يكن مجلد android موجوداً، قم بإضافته، وإلا اكتفِ بالمزامنة
           if [ ! -d "android" ]; then
             npx cap add android
           fi
@@ -40,10 +39,10 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-App-Fixed
+          name: ERT-App-Final-Fix
           path: android/app/build/outputs/apk/debug/app-debug.apk
