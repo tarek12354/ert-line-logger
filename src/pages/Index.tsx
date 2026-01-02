@@ -19,7 +19,7 @@ const Index = () => {
   const [aValue, setAValue] = useState(5.0);
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
-  const [displayValue, setDisplayValue] = useState<number | null>(null);
+  
   const measurementsEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -38,21 +38,6 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Live monitoring: Update every 500ms with real BLE data or simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (isConnected && liveValue !== null) {
-        // Use real Bluetooth data
-        setDisplayValue(liveValue);
-      } else {
-        // Simulation mode: random resistance between 50-500 Ω
-        const simulated = Math.random() * 450 + 50;
-        setDisplayValue(parseFloat(simulated.toFixed(2)));
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [isConnected, liveValue]);
 
   // Auto-scroll to latest measurement
   useEffect(() => {
@@ -86,40 +71,43 @@ const Index = () => {
     toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
   };
 
-  // Suivante button: Capture current displayValue and add to measurements list
+  // Suivante button: Capture real sensor value only
   const handleNextMeasure = async () => {
-    const valueToSave = isConnected ? liveValue : displayValue;
-    
-    if (valueToSave !== null && !Number.isNaN(valueToSave)) {
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-
-      if (gpsEnabled) {
-        const position = await getCurrentPosition();
-        if (position) {
-          latitude = position.latitude;
-          longitude = position.longitude;
-        }
-      }
-
-      const newMeasurement: MeasurementData = {
-        value: valueToSave.toFixed(2),
-        latitude,
-        longitude,
-        timestamp: Date.now(),
-      };
-
-      setMeasurements(prev => [...prev, newMeasurement]);
-      
-      const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
-      toast.success(`Mesure #${measurements.length + 1} enregistrée: ${valueToSave.toFixed(2)} Ω${gpsInfo}`);
-      
-      if (isConnected) {
-        await send('NEXT');
-      }
-    } else {
-      toast.warning('En attente de données...');
+    // Only allow saving real Bluetooth data
+    if (!isConnected) {
+      toast.warning('Connectez-vous au capteur ESP32 d\'abord');
+      return;
     }
+
+    if (liveValue === null || liveValue === 0 || Number.isNaN(liveValue)) {
+      toast.warning('No sensor data - En attente de données du capteur');
+      return;
+    }
+
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+
+    if (gpsEnabled) {
+      const position = await getCurrentPosition();
+      if (position) {
+        latitude = position.latitude;
+        longitude = position.longitude;
+      }
+    }
+
+    const newMeasurement: MeasurementData = {
+      value: liveValue.toFixed(2),
+      latitude,
+      longitude,
+      timestamp: Date.now(),
+    };
+
+    setMeasurements(prev => [...prev, newMeasurement]);
+    
+    const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
+    toast.success(`Mesure #${measurements.length + 1} enregistrée: ${liveValue.toFixed(2)} Ω${gpsInfo}`);
+    
+    await send('NEXT');
   };
 
   // Export measurements list as simple CSV
@@ -216,7 +204,7 @@ const Index = () => {
 
         {/* Live Monitoring - updates every 500ms */}
         <LiveMonitor 
-          liveValue={displayValue !== null ? displayValue.toFixed(2) : '---'} 
+          liveValue={liveValue !== null ? liveValue.toFixed(2) : null} 
           isConnected={isConnected} 
         />
 
@@ -250,7 +238,7 @@ const Index = () => {
         )}
 
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
-          <p>v1.2.0 • {isNative ? 'Native Mode' : 'Web Mode'} • {isConnected ? 'Live' : 'Simulation'}</p>
+          <p>v1.2.0 • {isNative ? 'Native Mode' : 'Web Mode'} • {isConnected ? 'Capteur Connecté' : 'Non connecté'}</p>
         </footer>
       </div>
     </div>
