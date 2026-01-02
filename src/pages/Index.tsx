@@ -1,52 +1,200 @@
-import React, { useState } from 'react';
-import { 
-  IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
-  IonButton, IonText, IonList, IonItem, IonLabel, IonIcon, useIonToast 
-} from '@ionic/react';
-import { playOutline, arrowForwardOutline, bluetoothOutline } from 'ionicons/icons';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useBluetooth } from '@/hooks/useBluetooth';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { StatusIndicator } from '@/components/StatusIndicator';
+import { ControlPanel } from '@/components/ControlPanel';
+import { MeasurementPanel } from '@/components/MeasurementPanel';
+import { ResistivityChart } from '@/components/ResistivityChart';
+import { LiveMonitor } from '@/components/LiveMonitor';
+import { exportToCSV, exportToKML } from '@/utils/exportUtils';
+import { MeasurementData } from '@/types/measurement';
+import { toast } from 'sonner';
+import { Zap, AlertTriangle, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-const Home: React.FC = () => {
-  const [present] = useIonToast();
-  const [currentValue, setCurrentValue] = useState<number>(0.00);
-  const [mesures, setMesures] = useState<{id: number, val: number, time: string}[]>([]);
+const Index = () => {
+  const navigate = useNavigate();
+  const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
+  const [aValue, setAValue] = useState(5.0);
+  const [showChart, setShowChart] = useState(false);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
 
-  const handleNext = () => {
-    const newM = { id: Date.now(), val: currentValue, time: new Date().toLocaleTimeString() };
-    setMesures(prev => [newM, ...prev]);
-    present({ message: 'Mesure enregistrée', duration: 1000, color: 'success' });
+  const {
+    isConnected,
+    isConnecting,
+    deviceName,
+    error,
+    isSupported,
+    isNative,
+    connect,
+    disconnect,
+    send,
+    rawBluetoothData,
+    liveValue,
+  } = useBluetooth();
+
+  const { getCurrentPosition, error: gpsError } = useGeolocation();
+
+  // تنبيهات الأخطاء
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
+
+  useEffect(() => {
+    if (gpsError) toast.error(gpsError);
+  }, [gpsError]);
+
+  const handleConnect = async () => {
+    const success = await connect();
+    if (success) toast.success('Connecté à ESP32_ERT');
   };
 
+  const handleDisconnect = async () => {
+    await disconnect();
+    toast.info('Déconnecté');
+  };
+
+  const handleStartLine = async (a: number) => {
+    setMeasurements([]);
+    setAValue(a);
+    await send(`A=${a}`);
+    await send('RESET');
+    toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
+  };
+
+  // --- الدالة المصلحة بالكامل لزر "Suivante" ---
+  const handleNextMeasure = async () => {
+    if (!isConnected) {
+      toast.error("Veuillez d'abord vous connecter au Bluetooth");
+      return;
+    }
+
+    // التأكد من أننا نأخذ أحدث قيمة حية موجودة في الهوك الآن
+    if (liveValue !== null && !Number.isNaN(liveValue)) {
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      if (gpsEnabled) {
+        const position = await getCurrentPosition();
+        if (position) {
+          latitude = position.latitude;
+          longitude = position.longitude;
+        }
+      }
+
+      const newMeasurement: MeasurementData = {
+        value: liveValue.toFixed(2),
+        latitude,
+        longitude,
+        timestamp: Date.now(),
+      };
+
+      // تحديث القائمة فوراً
+      setMeasurements(prev => [...prev, newMeasurement]);
+      
+      const gpsInfo = latitude && longitude 
+        ? ` (GPS OK)` 
+        : '';
+      
+      toast.success(`Mesure #${measurements.length + 1} enregistrée: ${liveValue.toFixed(2)}${gpsInfo}`);
+      
+      // إرسال نبضة للـ ESP32 لإعلامه بالانتقال للقياس التالي
+      await send('NEXT');
+    } else {
+      toast.warning('En attente de données du capteur...');
+      await send('READ'); // إرسال أمر قراءة إذا كانت القيمة مفقودة
+    }
+  };
+
+  const handleExport = () => {
+    exportToCSV(measurements, aValue);
+    toast.success(`Fichier CSV exporté (${measurements.length} mesures)`);
+  };
+
+  const handleExportKML = () => {
+    const hasGps = measurements.some(m => m.latitude !== null && m.longitude !== null);
+    if (!hasGps) {
+      toast.error('Aucune donnée GPS disponible');
+      return;
+    }
+    exportToKML(measurements, aValue);
+    toast.success('Fichier KML exporté');
+  };
+
+  const hasGpsData = measurements.some(m => m.latitude !== null && m.longitude !== null);
+
   return (
-    <IonPage>
-      <IonHeader>
-        <IonToolbar color="dark">
-          <IonTitle>ERT Line Logger</IonTitle>
-        </IonToolbar>
-      </IonHeader>
+    <div className="min-h-screen bg-background bg-grid">
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
+      
+      <div className="relative min-h-screen flex flex-col p-4 max-w-lg mx-auto">
+        <header className="text-center py-6">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/30">
+              <Zap className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-gradient-primary">ERT App</h1>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/diagnostic')} className="ml-2">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-sm font-mono">Tomographie de Résistivité Électrique</p>
+        </header>
 
-      <IonContent className="ion-padding" style={{ '--background': '#0a0a0a' }}>
-        <div style={{ background: '#121212', borderRadius: '15px', padding: '20px', textAlign: 'center', marginBottom: '20px', border: '1px solid #333' }}>
-          <IonText color="primary"><p>Live Monitoring</p></IonText>
-          <h1 style={{ fontSize: '4rem', color: '#00f2ff', margin: '10px 0' }}>{currentValue.toFixed(2)}</h1>
-          <IonText color="medium"><p>Current Resistance (R)</p></IonText>
+        {!isSupported && (
+          <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <p className="text-destructive font-semibold text-sm">Web Bluetooth non supporté</p>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <StatusIndicator isConnected={isConnected} isConnecting={isConnecting} deviceName={deviceName} />
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          <IonButton expand="block" color="success" style={{ flex: 1 }}>Démarrer</IonButton>
-          <IonButton expand="block" color="warning" onClick={handleNext} style={{ flex: 1 }}>Suivante</IonButton>
+        <div className="mb-4">
+          <ControlPanel
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onStartLine={handleStartLine}
+            onNextMeasure={handleNextMeasure}
+            onExport={handleExport}
+            onExportKML={handleExportKML}
+            onAnalyse={() => setShowChart(!showChart)}
+            hasMeasurements={measurements.length > 0}
+            gpsEnabled={gpsEnabled}
+            onGpsToggle={setGpsEnabled}
+            hasGpsData={hasGpsData}
+          />
         </div>
 
-        <IonText color="light"><h3>Mesures ({mesures.length})</h3></IonText>
-        <IonList style={{ background: 'transparent' }}>
-          {mesures.map(m => (
-            <IonItem key={m.id} style={{ '--background': '#1a1a1a', marginBottom: '5px', borderRadius: '10px' }}>
-              <IonLabel><h2 style={{ color: '#fff' }}>{m.val} Ω</h2><p>{m.time}</p></IonLabel>
-            </IonItem>
-          ))}
-        </IonList>
-      </IonContent>
-    </IonPage>
+        {/* عرض القيمة الحية باستمرار */}
+        <LiveMonitor 
+          liveValue={liveValue !== null ? liveValue.toFixed(2) : '---'} 
+          isConnected={isConnected} 
+        />
+
+        <MeasurementPanel measurements={measurements.map(m => m.value)} />
+
+        {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
+
+        {isConnected && (
+          <div className="glass-card rounded-lg p-2 mb-2 border border-muted/30">
+            <p className="text-xs text-muted-foreground font-mono">
+              <span className="text-primary">Raw BLE:</span> {rawBluetoothData || 'Receiving...'}
+            </p>
+          </div>
+        )}
+
+        <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
+          <p>v1.1.0 • {isNative ? 'Native Mode' : 'Web Mode'}</p>
+        </footer>
+      </div>
+    </div>
   );
 };
 
-export default Home;
+export default Index;
