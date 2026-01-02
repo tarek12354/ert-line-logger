@@ -1,10 +1,21 @@
+import { RefObject, useEffect, useRef } from 'react';
 import { Activity, Zap } from 'lucide-react';
 
 interface MeasurementPanelProps {
   measurements: string[];
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }
 
-export const MeasurementPanel = ({ measurements }: MeasurementPanelProps) => {
+export const MeasurementPanel = ({ measurements, scrollRef }: MeasurementPanelProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when measurements change
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [measurements]);
+
   return (
     <div className="bg-card border border-border rounded-xl p-4 flex-1 min-h-0 overflow-hidden flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -18,7 +29,10 @@ export const MeasurementPanel = ({ measurements }: MeasurementPanelProps) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-lg bg-background/50 border border-border p-3 font-mono text-sm">
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-y-auto rounded-lg bg-background/50 border border-border p-3 font-mono text-sm"
+      >
         {measurements.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <p>Aucune mesure enregistrée</p>
@@ -33,9 +47,11 @@ export const MeasurementPanel = ({ measurements }: MeasurementPanelProps) => {
                 <span className="text-muted-foreground w-8 text-right">
                   {String(index + 1).padStart(3, '0')}
                 </span>
-                <span className="text-foreground">{measurement}</span>
+                <span className="text-foreground">{measurement} Ω</span>
               </div>
             ))}
+            {/* Scroll anchor */}
+            <div ref={scrollRef} />
           </div>
         )}
       </div>
