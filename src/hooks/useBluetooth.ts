@@ -11,7 +11,6 @@ interface BluetoothState {
   permissionStatus: string | null;
 }
 
-// تعديل المعرفات لتطابق ESP32 الخاص بك
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
@@ -33,12 +32,8 @@ export const useBluetooth = () => {
   useEffect(() => {
     if (isNative) {
       BleClient.initialize({ androidNeverForLocation: false })
-        .then(() => {
-          setState(prev => ({ ...prev, permissionStatus: 'initialized' }));
-        })
-        .catch((err) => {
-          setState(prev => ({ ...prev, error: 'Erreur BLE: ' + err.message }));
-        });
+        .then(() => setState(prev => ({ ...prev, permissionStatus: 'initialized' })))
+        .catch((err) => setState(prev => ({ ...prev, error: 'Erreur BLE: ' + err.message })));
     }
   }, [isNative]);
 
@@ -59,7 +54,6 @@ export const useBluetooth = () => {
     setState(prev => ({ ...prev, isConnecting: true, error: null }));
     try {
       if (isNative) {
-        // تعديل هائل: جعل البحث يظهر كل الأجهزة لضمان ظهور ESP32_ERT
         const device = await BleClient.requestDevice({
           optionalServices: [SERVICE_UUID]
         });
@@ -70,23 +64,25 @@ export const useBluetooth = () => {
           setState(prev => ({ ...prev, isConnected: false, deviceName: null }));
         });
 
-        // CRITICAL: Start notifications IMMEDIATELY after connect
+        // --- التعديل الجوهري هنا لإصلاح التجمد ---
         await BleClient.startNotifications(
           device.deviceId,
           SERVICE_UUID,
           CHARACTERISTIC_UUID,
           (value) => {
-            const rawString = new TextDecoder().decode(value);
-            console.log('[BLE NOTIFICATION RECEIVED]:', rawString);
-
-            // Highest priority: reactive live value for UI
+            const rawString = new TextDecoder().decode(value).trim();
             setRawBluetoothData(rawString);
-            const val = parseFloat(rawString.split(',').pop() ?? '');
-            if (!Number.isNaN(val)) setLiveValue(val);
 
-            // Secondary: forward raw packets to consumers (e.g., saving to table)
-            if (onDataCallbackRef.current) {
-              onDataCallbackRef.current(rawString);
+            const parts = rawString.split(',');
+            const val = parseFloat(parts[parts.length - 1]);
+            
+            if (!Number.isNaN(val)) {
+              // استخدام دالة التحديث لضمان وصول القيمة للواجهة فوراً
+              setLiveValue(val);
+              
+              if (onDataCallbackRef.current) {
+                onDataCallbackRef.current(rawString);
+              }
             }
           }
         );
@@ -134,7 +130,6 @@ export const useBluetooth = () => {
     onDataCallbackRef.current = callback;
   }, []);
 
-  // Check Web Bluetooth support for browsers
   const isSupported = isNative || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
 
   return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, rawBluetoothData, liveValue };
