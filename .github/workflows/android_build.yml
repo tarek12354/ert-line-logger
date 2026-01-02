@@ -2,6 +2,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً
 
 jobs:
   build:
@@ -13,45 +14,36 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 18 # إصدار مستقر جداً للبناء
 
       - name: Install Dependencies
-        run: |
-          npm install
-          npm install @capacitor/android @capacitor/cli
+        run: npm install --legacy-peer-deps
 
       - name: Build Web Project
-        run: |
-          # بناء ملفات الويب وضمان وجود مجلد dist أو build
-          npm run build
+        run: npm run build
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17' # حل مشكلة invalid source release
           distribution: 'temurin'
 
-      - name: Force Rebuild Android Platform
+      - name: Sync Capacitor Android
         run: |
-          rm -rf android
-          npx cap add android
-          # تحديث ملف capacitor.config.json لضمان القراءة من المجلد الصحيح
+          # إذا لم يكن مجلد android موجوداً، قم بإضافته، وإلا اكتفِ بالمزامنة
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
           npx cap sync android
-
-      - name: Inject Bluetooth Permissions
-        run: |
-          FILE="android/app/src/main/AndroidManifest.xml"
-          PERMISSIONS='<uses-permission android:name="android.permission.BLUETOOTH" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
-          sed -i "/<manifest/a $PERMISSIONS" $FILE
 
       - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-Native-Bluetooth-App
+          name: ERT-App-Fixed
           path: android/app/build/outputs/apk/debug/app-debug.apk
