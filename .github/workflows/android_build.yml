@@ -14,7 +14,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22 # تم التحديث إلى 22 لحل خطأ [fatal]
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -25,7 +25,7 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '17' # للحفاظ على توافق Gradle مع أندرويد
           distribution: 'temurin'
 
       - name: Sync Capacitor Android
@@ -44,5 +44,5 @@ jobs:
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-App-Final-Fix
+          name: ERT-App-Final-Verified
           path: android/app/build/outputs/apk/debug/app-debug.apk
