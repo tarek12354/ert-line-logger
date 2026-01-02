@@ -10,7 +10,7 @@ import { LiveMonitor } from '@/components/LiveMonitor';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
-import { Zap, AlertTriangle, Settings } from 'lucide-react';
+import { Zap, AlertTriangle, Settings, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
@@ -19,6 +19,8 @@ const Index = () => {
   const [aValue, setAValue] = useState(5.0);
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [displayValue, setDisplayValue] = useState<number | null>(null);
+  const measurementsEndRef = useRef<HTMLDivElement>(null);
 
   const {
     isConnected,
@@ -36,7 +38,28 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // تنبيهات الأخطاء
+  // Live monitoring: Update every 500ms with real BLE data or simulation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isConnected && liveValue !== null) {
+        // Use real Bluetooth data
+        setDisplayValue(liveValue);
+      } else {
+        // Simulation mode: random resistance between 50-500 Ω
+        const simulated = Math.random() * 450 + 50;
+        setDisplayValue(parseFloat(simulated.toFixed(2)));
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isConnected, liveValue]);
+
+  // Auto-scroll to latest measurement
+  useEffect(() => {
+    measurementsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [measurements]);
+
+  // Error alerts
   useEffect(() => {
     if (error) toast.error(error);
   }, [error]);
@@ -63,15 +86,11 @@ const Index = () => {
     toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
   };
 
-  // --- الدالة المصلحة بالكامل لزر "Suivante" ---
+  // Suivante button: Capture current displayValue and add to measurements list
   const handleNextMeasure = async () => {
-    if (!isConnected) {
-      toast.error("Veuillez d'abord vous connecter au Bluetooth");
-      return;
-    }
-
-    // التأكد من أننا نأخذ أحدث قيمة حية موجودة في الهوك الآن
-    if (liveValue !== null && !Number.isNaN(liveValue)) {
+    const valueToSave = isConnected ? liveValue : displayValue;
+    
+    if (valueToSave !== null && !Number.isNaN(valueToSave)) {
       let latitude: number | null = null;
       let longitude: number | null = null;
 
@@ -84,27 +103,51 @@ const Index = () => {
       }
 
       const newMeasurement: MeasurementData = {
-        value: liveValue.toFixed(2),
+        value: valueToSave.toFixed(2),
         latitude,
         longitude,
         timestamp: Date.now(),
       };
 
-      // تحديث القائمة فوراً
       setMeasurements(prev => [...prev, newMeasurement]);
       
-      const gpsInfo = latitude && longitude 
-        ? ` (GPS OK)` 
-        : '';
+      const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
+      toast.success(`Mesure #${measurements.length + 1} enregistrée: ${valueToSave.toFixed(2)} Ω${gpsInfo}`);
       
-      toast.success(`Mesure #${measurements.length + 1} enregistrée: ${liveValue.toFixed(2)}${gpsInfo}`);
-      
-      // إرسال نبضة للـ ESP32 لإعلامه بالانتقال للقياس التالي
-      await send('NEXT');
+      if (isConnected) {
+        await send('NEXT');
+      }
     } else {
-      toast.warning('En attente de données du capteur...');
-      await send('READ'); // إرسال أمر قراءة إذا كانت القيمة مفقودة
+      toast.warning('En attente de données...');
     }
+  };
+
+  // Export measurements list as simple CSV
+  const handleExportSimpleCSV = () => {
+    if (measurements.length === 0) {
+      toast.error('Aucune mesure à exporter');
+      return;
+    }
+
+    const headers = ['ID', 'Value (Ω)', 'Timestamp'];
+    const rows = measurements.map((m, index) => {
+      const date = new Date(m.timestamp);
+      const timestamp = date.toISOString();
+      return [index + 1, m.value, timestamp].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mesures_${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`CSV exporté (${measurements.length} mesures)`);
   };
 
   const handleExport = () => {
@@ -171,13 +214,30 @@ const Index = () => {
           />
         </div>
 
-        {/* عرض القيمة الحية باستمرار */}
+        {/* Live Monitoring - updates every 500ms */}
         <LiveMonitor 
-          liveValue={liveValue !== null ? liveValue.toFixed(2) : '---'} 
+          liveValue={displayValue !== null ? displayValue.toFixed(2) : '---'} 
           isConnected={isConnected} 
         />
 
-        <MeasurementPanel measurements={measurements.map(m => m.value)} />
+        {/* Measurements Panel with auto-scroll ref */}
+        <MeasurementPanel 
+          measurements={measurements.map(m => m.value)} 
+          scrollRef={measurementsEndRef}
+        />
+
+        {/* Export CSV Button */}
+        {measurements.length > 0 && (
+          <div className="mt-3 mb-2">
+            <Button 
+              onClick={handleExportSimpleCSV}
+              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Exporter CSV ({measurements.length} mesures)
+            </Button>
+          </div>
+        )}
 
         {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
 
@@ -190,7 +250,7 @@ const Index = () => {
         )}
 
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
-          <p>v1.1.0 • {isNative ? 'Native Mode' : 'Web Mode'}</p>
+          <p>v1.2.0 • {isNative ? 'Native Mode' : 'Web Mode'} • {isConnected ? 'Live' : 'Simulation'}</p>
         </footer>
       </div>
     </div>
