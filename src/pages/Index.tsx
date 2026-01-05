@@ -12,7 +12,9 @@ import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
 import { Zap, AlertTriangle, Settings, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 const Index = () => {
   const navigate = useNavigate();
   const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
@@ -110,8 +112,8 @@ const Index = () => {
     }
   };
 
-  // Export measurements list as simple CSV
-  const handleExportSimpleCSV = () => {
+  // Export measurements list as simple CSV - Android compatible
+  const handleExportSimpleCSV = async () => {
     if (measurements.length === 0) {
       toast.error('Aucune mesure à exporter');
       return;
@@ -125,17 +127,46 @@ const Index = () => {
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `mesures_${Date.now()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const filename = `mesures_${Date.now()}.csv`;
 
-    toast.success(`CSV exporté (${measurements.length} mesures)`);
+    // Check if running on native platform (Android/iOS)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        // Write to Cache directory (no permissions needed on Android 11+)
+        const result = await Filesystem.writeFile({
+          path: filename,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+
+        // Share the file immediately
+        await Share.share({
+          title: 'Export CSV',
+          text: `ERT Mesures - ${measurements.length} points`,
+          url: result.uri,
+          dialogTitle: 'Partager le fichier CSV',
+        });
+
+        toast.success(`CSV exporté (${measurements.length} mesures)`);
+      } catch (error) {
+        console.error('Export error:', error);
+        toast.error('Erreur lors de l\'export');
+      }
+    } else {
+      // Web fallback - use blob download
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`CSV exporté (${measurements.length} mesures)`);
+    }
   };
 
   const handleExport = () => {
