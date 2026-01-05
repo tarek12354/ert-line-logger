@@ -169,19 +169,110 @@ const Index = () => {
     }
   };
 
-  const handleExport = () => {
-    exportToCSV(measurements, aValue);
-    toast.success(`Fichier CSV exporté (${measurements.length} mesures)`);
+  // Full CSV export with resistivity calculations - Android compatible
+  const handleExport = async () => {
+    if (measurements.length === 0) {
+      toast.error('Aucune mesure à exporter');
+      return;
+    }
+
+    const headers = ['N', 'R (Ω)', 'ρ (Ωm)', 'Prof (m)', 'Lat', 'Lon', 'Timestamp'];
+    const rows = measurements.map((m, index) => {
+      const R = parseFloat(m.value);
+      const rho = (2 * Math.PI * aValue * R).toFixed(2);
+      const depth = (aValue * 0.5).toFixed(2);
+      const lat = m.latitude?.toFixed(6) || '';
+      const lon = m.longitude?.toFixed(6) || '';
+      const ts = new Date(m.timestamp).toISOString();
+      return [index + 1, m.value, rho, depth, lat, lon, ts].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const filename = `ert_data_${Date.now()}.csv`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await Filesystem.writeFile({
+          path: filename,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+        await Share.share({
+          title: 'Export ERT CSV',
+          text: `ERT Data - ${measurements.length} points`,
+          url: result.uri,
+          dialogTitle: 'Partager le fichier CSV',
+        });
+        toast.success(`CSV exporté (${measurements.length} mesures)`);
+      } catch (error) {
+        console.error('Export error:', error);
+        toast.error('Erreur lors de l\'export');
+      }
+    } else {
+      exportToCSV(measurements, aValue);
+      toast.success(`Fichier CSV exporté (${measurements.length} mesures)`);
+    }
   };
 
-  const handleExportKML = () => {
+  // KML export - Android compatible with Share sheet
+  const handleExportKML = async () => {
     const hasGps = measurements.some(m => m.latitude !== null && m.longitude !== null);
     if (!hasGps) {
       toast.error('Aucune donnée GPS disponible');
       return;
     }
-    exportToKML(measurements, aValue);
-    toast.success('Fichier KML exporté');
+
+    // Generate KML content
+    const gpsPoints = measurements.filter(m => m.latitude !== null && m.longitude !== null);
+    let kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>ERT Measurements</name>
+    <description>a = ${aValue}m, ${gpsPoints.length} points</description>`;
+
+    gpsPoints.forEach((m, i) => {
+      const R = parseFloat(m.value);
+      const rho = (2 * Math.PI * aValue * R).toFixed(2);
+      kmlContent += `
+    <Placemark>
+      <name>Point ${i + 1}</name>
+      <description>R: ${m.value} Ω, ρ: ${rho} Ωm</description>
+      <Point>
+        <coordinates>${m.longitude},${m.latitude},0</coordinates>
+      </Point>
+    </Placemark>`;
+    });
+
+    kmlContent += `
+  </Document>
+</kml>`;
+
+    const filename = `ert_gps_${Date.now()}.kml`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await Filesystem.writeFile({
+          path: filename,
+          data: kmlContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+        await Share.share({
+          title: 'Export KML',
+          text: `ERT GPS Data - ${gpsPoints.length} points`,
+          url: result.uri,
+          dialogTitle: 'Partager le fichier KML',
+        });
+        toast.success('Fichier KML exporté');
+      } catch (error) {
+        console.error('KML export error:', error);
+        toast.error('Erreur lors de l\'export KML');
+      }
+    } else {
+      exportToKML(measurements, aValue);
+      toast.success('Fichier KML exporté');
+    }
   };
 
   const hasGpsData = measurements.some(m => m.latitude !== null && m.longitude !== null);
