@@ -7,20 +7,30 @@ import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
 import { LiveMonitor } from '@/components/LiveMonitor';
+import { AboutModal } from '@/components/AboutModal';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
 import { Zap, AlertTriangle, Settings, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
+
+type ArrayType = 'wenner' | 'schlumberger';
+
 const Index = () => {
   const navigate = useNavigate();
   const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
   const [aValue, setAValue] = useState(5.0);
+  const [lValue, setLValue] = useState(15.0); // For Schlumberger: L = AB/2
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [surveyName, setSurveyName] = useState('ERT_Survey_001');
+  const [arrayType, setArrayType] = useState<ArrayType>('wenner');
   
   const measurementsEndRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +50,19 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
+  // Calculate ρa based on array type
+  const calculateRhoA = (R: number): number => {
+    if (arrayType === 'wenner') {
+      // Wenner: ρa = 2πaR
+      return 2 * Math.PI * aValue * R;
+    } else {
+      // Schlumberger: ρa = π * ((L² - a²) / 2a) * R
+      return Math.PI * ((lValue * lValue - aValue * aValue) / (2 * aValue)) * R;
+    }
+  };
+
+  // Get current ρa for live display
+  const currentRhoA = liveValue !== null ? calculateRhoA(liveValue).toFixed(2) : null;
 
   // Auto-scroll to latest measurement
   useEffect(() => {
@@ -75,7 +98,6 @@ const Index = () => {
 
   // Suivante button: Capture current sensor value instantly - no blocking
   const handleNextMeasure = async () => {
-    // Get current value - use liveValue if available, otherwise show warning
     const valueToSave = liveValue;
     
     if (valueToSave === null || Number.isNaN(valueToSave)) {
@@ -103,59 +125,66 @@ const Index = () => {
 
     setMeasurements(prev => [...prev, newMeasurement]);
     
+    const rhoA = calculateRhoA(valueToSave).toFixed(2);
     const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
-    toast.success(`Mesure #${measurements.length + 1}: ${valueToSave.toFixed(2)} Ω${gpsInfo}`);
+    toast.success(`#${measurements.length + 1}: R=${valueToSave.toFixed(2)}Ω, ρa=${rhoA}Ω·m${gpsInfo}`);
     
-    // Send NEXT command to ESP32 if connected
-    if (isConnected) {
-      await send('NEXT');
-    }
+    // Passive listener - don't send NEXT command
   };
 
-  // Export measurements list as simple CSV - Android compatible
-  const handleExportSimpleCSV = async () => {
+  // Res2DInv DAT export format
+  const handleExportRes2DInv = async () => {
     if (measurements.length === 0) {
       toast.error('Aucune mesure à exporter');
       return;
     }
 
-    const headers = ['ID', 'Value (Ω)', 'Timestamp'];
-    const rows = measurements.map((m, index) => {
-      const date = new Date(m.timestamp);
-      const timestamp = date.toISOString();
-      return [index + 1, m.value, timestamp].join(',');
+    const arrayCode = arrayType === 'wenner' ? 3 : 7;
+    
+    // Build Res2DInv format
+    let content = '';
+    content += `${surveyName}\n`;           // Line 1: Survey name
+    content += `${aValue.toFixed(2)}\n`;    // Line 2: Electrode spacing
+    content += `${arrayCode}\n`;            // Line 3: Array code (3=Wenner, 7=Schlumberger)
+    content += `${measurements.length}\n`;  // Line 4: Total measurements
+    content += `0\n`;                        // Line 5: Type of x-location
+    content += `0\n`;                        // Line 6: IP data flag
+
+    // Lines 7+: Data rows [x-position] [spacing] [ρa]
+    measurements.forEach((m, index) => {
+      const R = parseFloat(m.value);
+      const rhoA = calculateRhoA(R);
+      const xPosition = (index + 1) * aValue; // x-position based on electrode spacing
+      const spacing = aValue;
+      content += `${xPosition.toFixed(2)}\t${spacing.toFixed(2)}\t${rhoA.toFixed(4)}\n`;
     });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const filename = `mesures_${Date.now()}.csv`;
+    content += `0\n0\n0\n0`; // End markers
 
-    // Check if running on native platform (Android/iOS)
+    const filename = `${surveyName}_${Date.now()}.dat`;
+
     if (Capacitor.isNativePlatform()) {
       try {
-        // Write to Cache directory (no permissions needed on Android 11+)
         const result = await Filesystem.writeFile({
           path: filename,
-          data: csvContent,
+          data: content,
           directory: Directory.Cache,
           encoding: Encoding.UTF8,
         });
-
-        // Share the file immediately
         await Share.share({
-          title: 'Export CSV',
-          text: `ERT Mesures - ${measurements.length} points`,
+          title: 'Export Res2DInv',
+          text: `${surveyName} - ${measurements.length} points`,
           url: result.uri,
-          dialogTitle: 'Partager le fichier CSV',
+          dialogTitle: 'Partager le fichier DAT',
         });
-
-        toast.success(`CSV exporté (${measurements.length} mesures)`);
+        toast.success(`DAT exporté (Res2DInv format)`);
       } catch (error) {
         console.error('Export error:', error);
         toast.error('Erreur lors de l\'export');
       }
     } else {
-      // Web fallback - use blob download
-      const blob = new Blob([csvContent], { type: 'text/csv' });
+      // Web fallback
+      const blob = new Blob([content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -164,8 +193,7 @@ const Index = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      toast.success(`CSV exporté (${measurements.length} mesures)`);
+      toast.success(`DAT exporté (Res2DInv format)`);
     }
   };
 
@@ -176,19 +204,19 @@ const Index = () => {
       return;
     }
 
-    const headers = ['N', 'R (Ω)', 'ρ (Ωm)', 'Prof (m)', 'Lat', 'Lon', 'Timestamp'];
+    const headers = ['N', 'R (Ω)', 'ρa (Ωm)', 'Prof (m)', 'Array', 'Lat', 'Lon', 'Timestamp'];
     const rows = measurements.map((m, index) => {
       const R = parseFloat(m.value);
-      const rho = (2 * Math.PI * aValue * R).toFixed(2);
+      const rhoA = calculateRhoA(R).toFixed(2);
       const depth = (aValue * 0.5).toFixed(2);
       const lat = m.latitude?.toFixed(6) || '';
       const lon = m.longitude?.toFixed(6) || '';
       const ts = new Date(m.timestamp).toISOString();
-      return [index + 1, m.value, rho, depth, lat, lon, ts].join(',');
+      return [index + 1, m.value, rhoA, depth, arrayType, lat, lon, ts].join(',');
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    const filename = `ert_data_${Date.now()}.csv`;
+    const filename = `${surveyName}_${Date.now()}.csv`;
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -200,7 +228,7 @@ const Index = () => {
         });
         await Share.share({
           title: 'Export ERT CSV',
-          text: `ERT Data - ${measurements.length} points`,
+          text: `${surveyName} - ${measurements.length} points`,
           url: result.uri,
           dialogTitle: 'Partager le fichier CSV',
         });
@@ -223,21 +251,20 @@ const Index = () => {
       return;
     }
 
-    // Generate KML content
     const gpsPoints = measurements.filter(m => m.latitude !== null && m.longitude !== null);
     let kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>ERT Measurements</name>
-    <description>a = ${aValue}m, ${gpsPoints.length} points</description>`;
+    <name>${surveyName}</name>
+    <description>a = ${aValue}m, ${arrayType}, ${gpsPoints.length} points</description>`;
 
     gpsPoints.forEach((m, i) => {
       const R = parseFloat(m.value);
-      const rho = (2 * Math.PI * aValue * R).toFixed(2);
+      const rhoA = calculateRhoA(R).toFixed(2);
       kmlContent += `
     <Placemark>
       <name>Point ${i + 1}</name>
-      <description>R: ${m.value} Ω, ρ: ${rho} Ωm</description>
+      <description>R: ${m.value} Ω, ρa: ${rhoA} Ωm</description>
       <Point>
         <coordinates>${m.longitude},${m.latitude},0</coordinates>
       </Point>
@@ -248,7 +275,7 @@ const Index = () => {
   </Document>
 </kml>`;
 
-    const filename = `ert_gps_${Date.now()}.kml`;
+    const filename = `${surveyName}_gps_${Date.now()}.kml`;
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -260,7 +287,7 @@ const Index = () => {
         });
         await Share.share({
           title: 'Export KML',
-          text: `ERT GPS Data - ${gpsPoints.length} points`,
+          text: `${surveyName} GPS Data - ${gpsPoints.length} points`,
           url: result.uri,
           dialogTitle: 'Partager le fichier KML',
         });
@@ -282,18 +309,70 @@ const Index = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
       
       <div className="relative min-h-screen flex flex-col p-4 max-w-lg mx-auto">
-        <header className="text-center py-6">
+        <header className="text-center py-4">
           <div className="flex items-center justify-center gap-3 mb-2">
             <div className="p-2 rounded-xl bg-primary/10 border border-primary/30">
               <Zap className="h-8 w-8 text-primary" />
             </div>
             <h1 className="text-3xl font-bold text-gradient-primary">ERT App</h1>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/diagnostic')} className="ml-2">
-              <Settings className="h-5 w-5" />
-            </Button>
+            <div className="flex gap-1 ml-2">
+              <AboutModal />
+              <Button variant="ghost" size="icon" onClick={() => navigate('/diagnostic')}>
+                <Settings className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
           <p className="text-muted-foreground text-sm font-mono">Tomographie de Résistivité Électrique</p>
         </header>
+
+        {/* Survey Configuration */}
+        <div className="glass-card rounded-xl p-4 mb-4 border border-primary/20">
+          <div className="space-y-3">
+            {/* Survey Name */}
+            <div>
+              <Label htmlFor="surveyName" className="text-xs text-muted-foreground">Nom du Sondage</Label>
+              <Input
+                id="surveyName"
+                value={surveyName}
+                onChange={(e) => setSurveyName(e.target.value)}
+                placeholder="ERT_Survey_001"
+                className="h-9 text-sm"
+              />
+            </div>
+            
+            {/* Array Type Selection */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Configuration</Label>
+                <Select value={arrayType} onValueChange={(v: ArrayType) => setArrayType(v)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="wenner">Wenner</SelectItem>
+                    <SelectItem value="schlumberger">Schlumberger</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* L Value for Schlumberger */}
+              {arrayType === 'schlumberger' && (
+                <div>
+                  <Label htmlFor="lValue" className="text-xs text-muted-foreground">L (AB/2) en m</Label>
+                  <Input
+                    id="lValue"
+                    type="number"
+                    value={lValue}
+                    onChange={(e) => setLValue(parseFloat(e.target.value) || 15)}
+                    className="h-9 text-sm"
+                    step="0.5"
+                    min="1"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {!isSupported && (
           <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3">
@@ -324,10 +403,12 @@ const Index = () => {
           />
         </div>
 
-        {/* Live Monitoring - updates every 500ms */}
+        {/* Live Monitoring - displays R and ρa */}
         <LiveMonitor 
           liveValue={liveValue !== null ? liveValue.toFixed(2) : null} 
-          isConnected={isConnected} 
+          isConnected={isConnected}
+          rhoA={currentRhoA}
+          arrayType={arrayType}
         />
 
         {/* Measurements Panel with auto-scroll ref */}
@@ -336,12 +417,20 @@ const Index = () => {
           scrollRef={measurementsEndRef}
         />
 
-        {/* Export CSV Button */}
+        {/* Export Buttons */}
         {measurements.length > 0 && (
-          <div className="mt-3 mb-2">
+          <div className="mt-3 mb-2 space-y-2">
             <Button 
-              onClick={handleExportSimpleCSV}
-              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground"
+              onClick={handleExportRes2DInv}
+              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Exporter DAT (Res2DInv)
+            </Button>
+            <Button 
+              onClick={handleExport}
+              variant="outline"
+              className="w-full"
             >
               <Download className="h-4 w-4 mr-2" />
               Exporter CSV ({measurements.length} mesures)
@@ -360,7 +449,8 @@ const Index = () => {
         )}
 
         <footer className="text-center py-4 text-muted-foreground text-xs font-mono">
-          <p>v1.2.0 • {isNative ? 'Native Mode' : 'Web Mode'} • {isConnected ? 'Capteur Connecté' : 'Non connecté'}</p>
+          <p className="font-semibold text-foreground mb-1">Par Tarek Attia</p>
+          <p>v1.3.0 • {isNative ? 'Native Mode' : 'Web Mode'} • {isConnected ? 'Capteur Connecté' : 'Non connecté'}</p>
         </footer>
       </div>
     </div>
