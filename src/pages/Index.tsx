@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useBluetooth } from '@/hooks/useBluetooth';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { StatusIndicator } from '@/components/StatusIndicator';
+import { Header } from '@/components/Header';
 import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
@@ -11,7 +12,7 @@ import { AboutModal } from '@/components/AboutModal';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
-import { Zap, AlertTriangle, Settings, Download } from 'lucide-react';
+import { AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -310,21 +311,10 @@ const Index = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
       
       <div className="relative min-h-screen flex flex-col p-4 max-w-lg mx-auto">
-        <header className="text-center py-4">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="p-2 rounded-xl bg-primary/10 border border-primary/30">
-              <Zap className="h-8 w-8 text-primary" />
-            </div>
-            <h1 className="text-3xl font-bold text-gradient-primary">ERT App</h1>
-            <div className="flex gap-1 ml-2">
-              <AboutModal />
-              <Button variant="ghost" size="icon" onClick={() => navigate('/diagnostic')}>
-                <Settings className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-          <p className="text-muted-foreground text-sm font-mono">Tomographie de Résistivité Électrique</p>
-        </header>
+        <Header
+          onOpenDiagnostic={() => navigate('/diagnostic')}
+          batteryVoltage={batteryVoltage}
+        />
 
         {/* Survey Configuration */}
         <div className="glass-card rounded-xl p-4 mb-4 border border-primary/20">
@@ -445,7 +435,15 @@ const Index = () => {
         {isConnected && (
           <div className="glass-card rounded-lg p-2 mb-2 border border-muted/30">
             <p className="text-xs text-muted-foreground font-mono">
-              <span className="text-primary">Raw BLE:</span> {rawBluetoothData || 'Receiving...'}
+              <span className="text-primary">Raw BLE:</span>{' '}
+              {rawBluetoothData ? (() => {
+                const [rRaw, vRaw] = rawBluetoothData.split(',');
+                const r = Number.parseFloat((rRaw ?? '').trim());
+                const v = Number.parseFloat((vRaw ?? '').trim());
+                const rText = Number.isFinite(r) ? `${r.toFixed(2)}Ω` : (rRaw ?? '').trim();
+                const vText = Number.isFinite(v) ? `${v.toFixed(1)}V` : (vRaw ?? '').trim();
+                return `R=${rText}${vRaw !== undefined ? `, V=${vText}` : ''}`;
+              })() : 'Receiving...'}
             </p>
           </div>
         )}
