@@ -46,6 +46,7 @@ const Index = () => {
     send,
     rawBluetoothData,
     liveValue,
+    batteryVoltage,
   } = useBluetooth();
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
@@ -409,6 +410,7 @@ const Index = () => {
           isConnected={isConnected}
           rhoA={currentRhoA}
           arrayType={arrayType}
+          batteryVoltage={batteryVoltage}
         />
 
         {/* Measurements Panel with auto-scroll ref */}

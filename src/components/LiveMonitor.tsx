@@ -1,14 +1,51 @@
 import { useState, useEffect, useRef } from 'react';
-import { Activity, CheckCircle2, Loader2 } from 'lucide-react';
+import { Activity, CheckCircle2, Loader2, BatteryLow, BatteryMedium, BatteryFull, BatteryWarning } from 'lucide-react';
 
 interface LiveMonitorProps {
   liveValue: string | null;
   isConnected: boolean;
   rhoA: string | null;
   arrayType: 'wenner' | 'schlumberger';
+  batteryVoltage: number | null;
 }
 
-export const LiveMonitor = ({ liveValue, isConnected, rhoA, arrayType }: LiveMonitorProps) => {
+// Calculate battery percentage: 18V = 100%, 15V = 0%
+const getBatteryPercentage = (voltage: number): number => {
+  const minV = 15;
+  const maxV = 18;
+  const percentage = ((voltage - minV) / (maxV - minV)) * 100;
+  return Math.max(0, Math.min(100, percentage));
+};
+
+const BatteryIndicator = ({ voltage }: { voltage: number | null }) => {
+  if (voltage === null) return null;
+  
+  const percentage = getBatteryPercentage(voltage);
+  const isLow = voltage < 16;
+  
+  const getBatteryIcon = () => {
+    if (percentage <= 10) return BatteryWarning;
+    if (percentage <= 25) return BatteryLow;
+    if (percentage <= 75) return BatteryMedium;
+    return BatteryFull;
+  };
+  
+  const BatteryIcon = getBatteryIcon();
+  
+  return (
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+      isLow 
+        ? 'bg-destructive/20 text-destructive border border-destructive/30' 
+        : 'bg-green-500/20 text-green-400 border border-green-500/30'
+    }`}>
+      <BatteryIcon className={`h-4 w-4 ${isLow ? 'text-destructive' : 'text-green-400'}`} />
+      <span className="font-mono">{voltage.toFixed(1)}V</span>
+      <span className="text-[10px] opacity-70">({Math.round(percentage)}%)</span>
+    </div>
+  );
+};
+
+export const LiveMonitor = ({ liveValue, isConnected, rhoA, arrayType, batteryVoltage }: LiveMonitorProps) => {
   const [isStable, setIsStable] = useState(false);
   const [previousValue, setPreviousValue] = useState<string | null>(null);
   const stabilityTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -55,25 +92,29 @@ export const LiveMonitor = ({ liveValue, isConnected, rhoA, arrayType }: LiveMon
           </span>
         </div>
         
-        {isConnected && liveValue && (
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-            isStable 
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-              : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-          }`}>
-            {isStable ? (
-              <>
-                <CheckCircle2 className="h-3 w-3" />
-                Stable
-              </>
-            ) : (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Stabilizing...
-              </>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isConnected && <BatteryIndicator voltage={batteryVoltage} />}
+          
+          {isConnected && liveValue && (
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+              isStable 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+            }`}>
+              {isStable ? (
+                <>
+                  <CheckCircle2 className="h-3 w-3" />
+                  Stable
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Stabilizing...
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-background/50 rounded-lg p-4">
