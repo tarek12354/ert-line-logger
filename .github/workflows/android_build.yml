@@ -14,25 +14,24 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # تم الترقية إلى 22 لحل خطأ الصورة الأخيرة
+          node-version: 20
 
       - name: Install Dependencies
         run: |
-          npm install --force
-          npm install @capacitor/core @capacitor/cli @capacitor/android --force
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/share @capacitor-community/bluetooth-le --legacy-peer-deps
 
       - name: Build Web Project
         run: npm run build
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Initialize Android Platform
         run: |
-          # حذف المجلد القديم لضمان بناء نظيف 100%
           rm -rf android
           npx cap add android
           npx cap sync android
@@ -41,7 +40,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
