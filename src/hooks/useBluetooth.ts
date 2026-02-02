@@ -27,6 +27,7 @@ export const useBluetooth = () => {
   const onDataCallbackRef = useRef<((data: string) => void) | null>(null);
   const [rawBluetoothData, setRawBluetoothData] = useState<string>('');
   const [liveValue, setLiveValue] = useState<number | null>(null);
+  const [batteryVoltage, setBatteryVoltage] = useState<number | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -73,12 +74,17 @@ export const useBluetooth = () => {
             const rawString = new TextDecoder().decode(value).trim();
             setRawBluetoothData(rawString);
 
+            // Parse format: "Resistance,Voltage" (e.g., "7.90,18.2")
             const parts = rawString.split(',');
-            const val = parseFloat(parts[parts.length - 1]);
+            const resistance = parseFloat(parts[0]);
+            const voltage = parts.length > 1 ? parseFloat(parts[1]) : null;
             
-            if (!Number.isNaN(val)) {
-              // استخدام دالة التحديث لضمان وصول القيمة للواجهة فوراً
-              setLiveValue(val);
+            if (!Number.isNaN(resistance)) {
+              setLiveValue(resistance);
+              
+              if (voltage !== null && !Number.isNaN(voltage)) {
+                setBatteryVoltage(voltage);
+              }
               
               if (onDataCallbackRef.current) {
                 onDataCallbackRef.current(rawString);
@@ -132,5 +138,5 @@ export const useBluetooth = () => {
 
   const isSupported = isNative || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
 
-  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, rawBluetoothData, liveValue };
+  return { ...state, isNative, isSupported, connect, disconnect, send, setOnDataCallback, requestPermissions, rawBluetoothData, liveValue, batteryVoltage };
 };
