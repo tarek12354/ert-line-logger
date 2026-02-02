@@ -21,7 +21,32 @@ const BatteryIndicator = ({ voltage }: { voltage: number | null }) => {
   if (voltage === null) return null;
   
   const percentage = getBatteryPercentage(voltage);
-  const isLow = voltage < 16;
+  
+  // Color logic: >17V green, 16-17V yellow, <16V red with blinking
+  const getColorClasses = () => {
+    if (voltage > 17) {
+      return {
+        bg: 'bg-green-500/20',
+        text: 'text-green-400',
+        border: 'border-green-500/30',
+        blink: false
+      };
+    } else if (voltage >= 16) {
+      return {
+        bg: 'bg-yellow-500/20',
+        text: 'text-yellow-400',
+        border: 'border-yellow-500/30',
+        blink: false
+      };
+    } else {
+      return {
+        bg: 'bg-destructive/20',
+        text: 'text-destructive',
+        border: 'border-destructive/30',
+        blink: true
+      };
+    }
+  };
   
   const getBatteryIcon = () => {
     if (percentage <= 10) return BatteryWarning;
@@ -30,15 +55,12 @@ const BatteryIndicator = ({ voltage }: { voltage: number | null }) => {
     return BatteryFull;
   };
   
+  const colors = getColorClasses();
   const BatteryIcon = getBatteryIcon();
   
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-      isLow 
-        ? 'bg-destructive/20 text-destructive border border-destructive/30' 
-        : 'bg-green-500/20 text-green-400 border border-green-500/30'
-    }`}>
-      <BatteryIcon className={`h-4 w-4 ${isLow ? 'text-destructive' : 'text-green-400'}`} />
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} ${colors.blink ? 'animate-pulse' : ''}`}>
+      <BatteryIcon className={`h-4 w-4 ${colors.text}`} />
       <span className="font-mono">{voltage.toFixed(1)}V</span>
       <span className="text-[10px] opacity-70">({Math.round(percentage)}%)</span>
     </div>
