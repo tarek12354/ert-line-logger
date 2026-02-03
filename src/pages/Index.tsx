@@ -8,6 +8,7 @@ import { ControlPanel } from '@/components/ControlPanel';
 import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
 import { LiveMonitor } from '@/components/LiveMonitor';
+import { ZeroCalibration } from '@/components/ZeroCalibration';
 import { AboutModal } from '@/components/AboutModal';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
@@ -47,7 +48,13 @@ const Index = () => {
     send,
     rawBluetoothData,
     liveValue,
+    averagedResistance,
     batteryVoltage,
+    sensorData,
+    calibrateZero,
+    resetZeroCalibration,
+    isZeroCalibrated,
+    zeroOffset,
   } = useBluetooth();
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
@@ -63,8 +70,11 @@ const Index = () => {
     }
   };
 
-  // Get current ρa for live display
-  const currentRhoA = liveValue !== null ? calculateRhoA(liveValue).toFixed(2) : null;
+  // Use averaged resistance for display (or raw if not available)
+  const displayResistance = averagedResistance ?? liveValue;
+  
+  // Get current ρa for live display with 4 decimal precision
+  const currentRhoA = displayResistance !== null ? calculateRhoA(displayResistance).toFixed(4) : null;
 
   // Auto-scroll to latest measurement
   useEffect(() => {
@@ -100,7 +110,8 @@ const Index = () => {
 
   // Suivante button: Capture current sensor value instantly - no blocking
   const handleNextMeasure = async () => {
-    const valueToSave = liveValue;
+    // Use averaged value for better accuracy
+    const valueToSave = averagedResistance ?? liveValue;
     
     if (valueToSave === null || Number.isNaN(valueToSave)) {
       toast.warning('En attente de données BLE...');
@@ -119,7 +130,7 @@ const Index = () => {
     }
 
     const newMeasurement: MeasurementData = {
-      value: valueToSave.toFixed(2),
+      value: valueToSave.toFixed(4), // 4 decimal precision
       latitude,
       longitude,
       timestamp: Date.now(),
@@ -127,9 +138,9 @@ const Index = () => {
 
     setMeasurements(prev => [...prev, newMeasurement]);
     
-    const rhoA = calculateRhoA(valueToSave).toFixed(2);
+    const rhoA = calculateRhoA(valueToSave).toFixed(4);
     const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
-    toast.success(`#${measurements.length + 1}: R=${valueToSave.toFixed(2)}Ω, ρa=${rhoA}Ω·m${gpsInfo}`);
+    toast.success(`#${measurements.length + 1}: R=${valueToSave.toFixed(4)}Ω, ρa=${rhoA}Ω·m${gpsInfo}`);
     
     // Passive listener - don't send NEXT command
   };
@@ -394,13 +405,24 @@ const Index = () => {
           />
         </div>
 
+        {/* Zero Calibration Panel */}
+        <ZeroCalibration
+          isCalibrated={isZeroCalibrated}
+          zeroOffset={zeroOffset}
+          onCalibrate={calibrateZero}
+          onReset={resetZeroCalibration}
+          isConnected={isConnected}
+        />
+
         {/* Live Monitoring - displays R and ρa */}
         <LiveMonitor 
-          liveValue={liveValue !== null ? liveValue.toFixed(2) : null} 
+          liveValue={liveValue} 
+          averagedValue={averagedResistance}
           isConnected={isConnected}
           rhoA={currentRhoA}
           arrayType={arrayType}
           batteryVoltage={batteryVoltage}
+          sensorData={sensorData}
         />
 
         {/* Measurements Panel with auto-scroll ref */}
@@ -437,12 +459,18 @@ const Index = () => {
             <p className="text-xs text-muted-foreground font-mono">
               <span className="text-primary">Raw BLE:</span>{' '}
               {rawBluetoothData ? (() => {
-                const [rRaw, vRaw] = rawBluetoothData.split(',');
-                const r = Number.parseFloat((rRaw ?? '').trim());
-                const v = Number.parseFloat((vRaw ?? '').trim());
-                const rText = Number.isFinite(r) ? `${r.toFixed(2)}Ω` : (rRaw ?? '').trim();
-                const vText = Number.isFinite(v) ? `${v.toFixed(1)}V` : (vRaw ?? '').trim();
-                return `R=${rText}${vRaw !== undefined ? `, V=${vText}` : ''}`;
+                const parts = rawBluetoothData.split(',');
+                if (parts.length >= 3) {
+                  // New format: Current(mA),Voltage(V),Battery(V)
+                  const iText = `I=${parts[0]}mA`;
+                  const vText = `V=${parts[1]}V`;
+                  const batText = `Bat=${parts[2]}V`;
+                  return `${iText}, ${vText}, ${batText}`;
+                } else if (parts.length === 2) {
+                  // Legacy format
+                  return `R=${parts[0]}Ω, V=${parts[1]}V`;
+                }
+                return rawBluetoothData;
               })() : 'Receiving...'}
             </p>
           </div>
