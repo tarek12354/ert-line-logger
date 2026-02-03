@@ -36,16 +36,20 @@ jobs:
 
       - name: Initialize & Sync Capacitor
         run: |
-          # إزالة المجلد القديم لضمان بناء نظيف متوافق مع Java 17
           rm -rf android
           npx cap add android
           npx cap sync android
+
+      - name: Force Java 17 Compatibility
+        run: |
+          # هذا السطر يحل مشكلة "invalid source release: 21" يدوياً
+          find android -name "build.gradle" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
+          find android -name "build.gradle" -exec sed -i 's/sourceCompatibility = 21/sourceCompatibility = 17/g' {} +
+          find android -name "build.gradle" -exec sed -i 's/targetCompatibility = 21/targetCompatibility = 17/g' {} +
 
       - name: Build APK (Debug)
         run: |
           cd android
           chmod +x gradlew
-          # تنظيف مشروع جرادل قبل البدء
           ./gradlew clean
-          # إجبار البناء باستخدام Java 17 المتوفرة في السيرفر
           ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
