@@ -7,22 +7,22 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest # التبديل للأحدث تلقائياً
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js (20 LTS)
+      - name: Set up Node.js (22)
         uses: actions/setup-node@v4
         with:
-          node-version: 20 # إصدار LTS أكثر استقراراً لعمليات البناء
+          node-version: 22  # تحديث للإصدار المطلوب من Capacitor
           cache: 'npm'
 
       - name: Install Dependencies
         run: |
-          npm install --legacy-peer-deps 
-          # استخدام install بدلاً من ci لتجاوز تعارضات Capacitor الحديثة
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web Project
         run: npm run build
@@ -30,23 +30,23 @@ jobs:
       - name: Set up JDK (17)
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # Java 17 هي الأكثر توافقاً مع Gradle 8+
+          java-version: '17' # استخدام الإصدار 17 لضمان توافق Gradle
           distribution: 'temurin'
+          cache: gradle
 
       - name: Initialize & Sync Capacitor
         run: |
-          npx cap add android || true
           npx cap sync android
 
       - name: Build APK (Debug)
         run: |
           cd android
-          ./gradlew clean # تنظيف المخلفات السابقة قبل البناء
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ERT-App-Final
+          name: ERT-App-Final-Build
           path: android/app/build/outputs/apk/debug/app-debug.apk
