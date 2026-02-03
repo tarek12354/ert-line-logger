@@ -27,10 +27,10 @@ jobs:
       - name: Build Web Project
         run: npm run build
 
-      - name: Set up JDK (17)
+      - name: Set up JDK (21)
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21' # ترقية الجافا لـ 21 لحل خطأ invalid source release
           distribution: 'temurin'
           cache: gradle
 
@@ -40,16 +40,9 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Force Java 17 Compatibility
-        run: |
-          # هذا السطر يحل مشكلة "invalid source release: 21" يدوياً
-          find android -name "build.gradle" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
-          find android -name "build.gradle" -exec sed -i 's/sourceCompatibility = 21/sourceCompatibility = 17/g' {} +
-          find android -name "build.gradle" -exec sed -i 's/targetCompatibility = 21/targetCompatibility = 17/g' {} +
-
       - name: Build APK (Debug)
         run: |
           cd android
           chmod +x gradlew
           ./gradlew clean
-          ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
+          ./gradlew assembleDebug --no-daemon
