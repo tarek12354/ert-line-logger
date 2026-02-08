@@ -2,20 +2,20 @@ import { MeasurementData, DataPoint, classifyResistivity, getClassificationColor
 
 export const exportToCSV = (
   measurements: MeasurementData[],
-  aValue: number
+  initialA: number
 ): void => {
-  const headers = ['#', 'Résistance (Ω)', 'Résistivité (Ω·m)', 'Profondeur (m)', 'Classification', 'Latitude', 'Longitude'];
+  const headers = ['#', 'a (m)', 'X (m)', 'Résistance (Ω)', 'Résistivité (Ω·m)', 'Profondeur (m)', 'Classification', 'Latitude', 'Longitude'];
   
   const rows = measurements.map((m, index) => {
-    const resistance = parseFloat(m.value.replace(',', '.')) || 0;
-    const resistivity = 2 * Math.PI * aValue * resistance;
-    const depth = aValue * 0.5 * (index + 1);
-    const { classification } = classifyResistivity(resistivity);
+    const { classification } = classifyResistivity(m.rhoA);
+    const depth = m.aValue * 0.5;
     
     return [
       index + 1,
-      resistance.toFixed(2),
-      resistivity.toFixed(2),
+      m.aValue.toFixed(2),
+      m.xLocation.toFixed(2),
+      m.value,
+      m.rhoA.toFixed(4),
       depth.toFixed(2),
       classification,
       m.latitude?.toFixed(6) || '',
@@ -24,7 +24,7 @@ export const exportToCSV = (
   });
 
   const content = [headers.join(','), ...rows].join('\n');
-  downloadFile(content, `ert_data_${Date.now()}.csv`, 'text/csv');
+  downloadFile(content, `ves_data_${Date.now()}.csv`, 'text/csv');
 };
 
 export const exportToTXT = (
@@ -43,18 +43,16 @@ export const exportToTXT = (
 
 export const exportToKML = (
   measurements: MeasurementData[],
-  aValue: number
+  initialA: number
 ): void => {
   const dataPoints: DataPoint[] = measurements.map((m, index) => {
-    const resistance = parseFloat(m.value.replace(',', '.')) || 0;
-    const resistivity = 2 * Math.PI * aValue * resistance;
-    const depth = aValue * 0.5 * (index + 1);
-    const { classification, label } = classifyResistivity(resistivity);
+    const depth = m.aValue * 0.5;
+    const { classification, label } = classifyResistivity(m.rhoA);
     
     return {
       index: index + 1,
-      resistance,
-      resistivity: Math.round(resistivity * 100) / 100,
+      resistance: parseFloat(m.value),
+      resistivity: Math.round(m.rhoA * 100) / 100,
       depth: Math.round(depth * 100) / 100,
       classification,
       label,
@@ -108,10 +106,10 @@ export const exportToKML = (
   const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>ERT Survey - ${new Date().toLocaleDateString()}</name>
+    <name>VES Survey - ${new Date().toLocaleDateString()}</name>
     <description>
-      Electrical Resistivity Tomography Survey Data
-      Espacement (a): ${aValue} m
+      Vertical Electrical Sounding Survey Data
+      Initial Espacement (a): ${initialA} m
       Seuils: Vide > ${RESISTIVITY_THRESHOLDS.VOID} Ω·m (Rouge), Eau < ${RESISTIVITY_THRESHOLDS.WATER} Ω·m (Bleu)
     </description>
     

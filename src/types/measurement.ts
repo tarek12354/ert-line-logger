@@ -1,5 +1,8 @@
 export interface MeasurementData {
   value: string;
+  aValue: number; // Electrode spacing used for this measurement
+  xLocation: number; // X = 1.5 × a for VES with fixed C1
+  rhoA: number; // Calculated apparent resistivity
   latitude: number | null;
   longitude: number | null;
   timestamp: number;
