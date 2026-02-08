@@ -9,6 +9,7 @@ import { MeasurementPanel } from '@/components/MeasurementPanel';
 import { ResistivityChart } from '@/components/ResistivityChart';
 import { LiveMonitor } from '@/components/LiveMonitor';
 import { ZeroCalibration } from '@/components/ZeroCalibration';
+import { CurrentSpacingDisplay } from '@/components/CurrentSpacingDisplay';
 import { AboutModal } from '@/components/AboutModal';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
@@ -27,11 +28,12 @@ type ArrayType = 'wenner' | 'schlumberger';
 const Index = () => {
   const navigate = useNavigate();
   const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
-  const [aValue, setAValue] = useState(5.0);
+  const [initialA, setInitialA] = useState(1.0); // Initial electrode spacing (step)
+  const [currentA, setCurrentA] = useState(1.0); // Current electrode spacing (auto-increments)
   const [lValue, setLValue] = useState(15.0); // For Schlumberger: L = AB/2
   const [showChart, setShowChart] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(false);
-  const [surveyName, setSurveyName] = useState('ERT_Survey_001');
+  const [surveyName, setSurveyName] = useState('VES_Survey_001');
   const [arrayType, setArrayType] = useState<ArrayType>('wenner');
   
   const measurementsEndRef = useRef<HTMLDivElement>(null);
@@ -59,22 +61,27 @@ const Index = () => {
 
   const { getCurrentPosition, error: gpsError } = useGeolocation();
 
-  // Calculate ρa based on array type
-  const calculateRhoA = (R: number): number => {
+  // Calculate ρa based on array type - uses provided 'a' value for flexibility
+  const calculateRhoA = (R: number, aForCalculation: number): number => {
     if (arrayType === 'wenner') {
       // Wenner: ρa = 2πaR
-      return 2 * Math.PI * aValue * R;
+      return 2 * Math.PI * aForCalculation * R;
     } else {
       // Schlumberger: ρa = π * ((L² - a²) / 2a) * R
-      return Math.PI * ((lValue * lValue - aValue * aValue) / (2 * aValue)) * R;
+      return Math.PI * ((lValue * lValue - aForCalculation * aForCalculation) / (2 * aForCalculation)) * R;
     }
+  };
+
+  // Calculate X-location for VES with fixed C1: X = 1.5 × a
+  const calculateXLocation = (a: number): number => {
+    return 1.5 * a;
   };
 
   // Use averaged resistance for display (or raw if not available)
   const displayResistance = averagedResistance ?? liveValue;
   
-  // Get current ρa for live display with 4 decimal precision
-  const currentRhoA = displayResistance !== null ? calculateRhoA(displayResistance).toFixed(4) : null;
+  // Get current ρa for live display with 4 decimal precision (using currentA)
+  const currentRhoA = displayResistance !== null ? calculateRhoA(displayResistance, currentA).toFixed(4) : null;
 
   // Auto-scroll to latest measurement
   useEffect(() => {
@@ -102,13 +109,14 @@ const Index = () => {
 
   const handleStartLine = async (a: number) => {
     setMeasurements([]);
-    setAValue(a);
+    setInitialA(a);
+    setCurrentA(a); // Reset current spacing to initial
     await send(`A=${a}`);
     await send('RESET');
-    toast.success(`Nouvelle ligne démarrée (a = ${a}m)`);
+    toast.success(`VES démarré (a initial = ${a}m)`);
   };
 
-  // Suivante button: Capture current sensor value instantly - no blocking
+  // Suivante button: Capture current sensor value and auto-increment spacing
   const handleNextMeasure = async () => {
     // Use averaged value for better accuracy
     const valueToSave = averagedResistance ?? liveValue;
@@ -129,8 +137,15 @@ const Index = () => {
       }
     }
 
+    // Calculate values using CURRENT spacing before increment
+    const rhoA = calculateRhoA(valueToSave, currentA);
+    const xLocation = calculateXLocation(currentA);
+
     const newMeasurement: MeasurementData = {
       value: valueToSave.toFixed(4), // 4 decimal precision
+      aValue: currentA, // Store the 'a' used for this measurement
+      xLocation: xLocation, // X = 1.5 × a
+      rhoA: rhoA, // Store calculated ρa
       latitude,
       longitude,
       timestamp: Date.now(),
@@ -138,14 +153,19 @@ const Index = () => {
 
     setMeasurements(prev => [...prev, newMeasurement]);
     
-    const rhoA = calculateRhoA(valueToSave).toFixed(4);
     const gpsInfo = latitude && longitude ? ` (GPS OK)` : '';
-    toast.success(`#${measurements.length + 1}: R=${valueToSave.toFixed(4)}Ω, ρa=${rhoA}Ω·m${gpsInfo}`);
+    toast.success(`#${measurements.length + 1}: a=${currentA}m, R=${valueToSave.toFixed(4)}Ω, ρa=${rhoA.toFixed(4)}Ω·m${gpsInfo}`);
     
-    // Passive listener - don't send NEXT command
+    // AUTO-INCREMENT: Increase 'a' by the initial step for next measurement
+    const nextA = currentA + initialA;
+    setCurrentA(nextA);
+    
+    toast.info(`➡️ Prochain écartement: a = ${nextA.toFixed(1)}m`, {
+      duration: 4000,
+    });
   };
 
-  // Res2DInv DAT export format
+  // Res2DInv DAT export format - VES with proper X-location
   const handleExportRes2DInv = async () => {
     if (measurements.length === 0) {
       toast.error('Aucune mesure à exporter');
@@ -154,22 +174,24 @@ const Index = () => {
 
     const arrayCode = arrayType === 'wenner' ? 3 : 7;
     
-    // Build Res2DInv format
+    // Build Res2DInv format with TAB separators
     let content = '';
     content += `${surveyName}\n`;           // Line 1: Survey name
-    content += `${aValue.toFixed(2)}\n`;    // Line 2: Electrode spacing
+    content += `${initialA.toFixed(2)}\n`;  // Line 2: Unit electrode spacing
     content += `${arrayCode}\n`;            // Line 3: Array code (3=Wenner, 7=Schlumberger)
     content += `${measurements.length}\n`;  // Line 4: Total measurements
     content += `0\n`;                        // Line 5: Type of x-location
     content += `0\n`;                        // Line 6: IP data flag
 
-    // Lines 7+: Data rows [x-position] [spacing] [ρa]
-    measurements.forEach((m, index) => {
-      const R = parseFloat(m.value);
-      const rhoA = calculateRhoA(R);
-      const xPosition = (index + 1) * aValue; // x-position based on electrode spacing
-      const spacing = aValue;
-      content += `${xPosition.toFixed(2)}\t${spacing.toFixed(2)}\t${rhoA.toFixed(4)}\n`;
+    // Lines 7+: Data rows [X-Location] \t [Current a] \t [Calculated ρa]
+    // X = 1.5 × a (for VES with fixed C1)
+    measurements.forEach((m) => {
+      // Use stored values from each measurement
+      const xLocation = m.xLocation.toFixed(2);
+      const aSpacing = m.aValue.toFixed(2);
+      const rhoA = m.rhoA.toFixed(4);
+      // TAB separator to prevent number merging
+      content += `${xLocation}\t${aSpacing}\t${rhoA}\n`;
     });
 
     content += `0\n0\n0\n0`; // End markers
@@ -217,15 +239,24 @@ const Index = () => {
       return;
     }
 
-    const headers = ['N', 'R (Ω)', 'ρa (Ωm)', 'Prof (m)', 'Array', 'Lat', 'Lon', 'Timestamp'];
+    const headers = ['N', 'a (m)', 'X (m)', 'R (Ω)', 'ρa (Ωm)', 'Prof (m)', 'Array', 'Lat', 'Lon', 'Timestamp'];
     const rows = measurements.map((m, index) => {
-      const R = parseFloat(m.value);
-      const rhoA = calculateRhoA(R).toFixed(2);
-      const depth = (aValue * 0.5).toFixed(2);
+      const depth = (m.aValue * 0.5).toFixed(2); // Depth based on that measurement's 'a'
       const lat = m.latitude?.toFixed(6) || '';
       const lon = m.longitude?.toFixed(6) || '';
       const ts = new Date(m.timestamp).toISOString();
-      return [index + 1, m.value, rhoA, depth, arrayType, lat, lon, ts].join(',');
+      return [
+        index + 1, 
+        m.aValue.toFixed(2), 
+        m.xLocation.toFixed(2), 
+        m.value, 
+        m.rhoA.toFixed(4), 
+        depth, 
+        arrayType, 
+        lat, 
+        lon, 
+        ts
+      ].join(',');
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -251,7 +282,7 @@ const Index = () => {
         toast.error('Erreur lors de l\'export');
       }
     } else {
-      exportToCSV(measurements, aValue);
+      exportToCSV(measurements, initialA);
       toast.success(`Fichier CSV exporté (${measurements.length} mesures)`);
     }
   };
@@ -269,15 +300,13 @@ const Index = () => {
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>${surveyName}</name>
-    <description>a = ${aValue}m, ${arrayType}, ${gpsPoints.length} points</description>`;
+    <description>VES Survey, Initial a = ${initialA}m, ${arrayType}, ${gpsPoints.length} points</description>`;
 
     gpsPoints.forEach((m, i) => {
-      const R = parseFloat(m.value);
-      const rhoA = calculateRhoA(R).toFixed(2);
       kmlContent += `
     <Placemark>
-      <name>Point ${i + 1}</name>
-      <description>R: ${m.value} Ω, ρa: ${rhoA} Ωm</description>
+      <name>Point ${i + 1} (a=${m.aValue}m)</name>
+      <description>a: ${m.aValue}m, X: ${m.xLocation.toFixed(2)}m, R: ${m.value} Ω, ρa: ${m.rhoA.toFixed(2)} Ωm</description>
       <Point>
         <coordinates>${m.longitude},${m.latitude},0</coordinates>
       </Point>
@@ -310,7 +339,7 @@ const Index = () => {
         toast.error('Erreur lors de l\'export KML');
       }
     } else {
-      exportToKML(measurements, aValue);
+      exportToKML(measurements, initialA);
       toast.success('Fichier KML exporté');
     }
   };
@@ -414,6 +443,14 @@ const Index = () => {
           isConnected={isConnected}
         />
 
+        {/* Current Target Spacing Display - Large and Prominent */}
+        {isConnected && (
+          <CurrentSpacingDisplay 
+            currentA={currentA} 
+            measurementNumber={measurements.length} 
+          />
+        )}
+
         {/* Live Monitoring - displays R and ρa */}
         <LiveMonitor 
           liveValue={liveValue} 
@@ -452,7 +489,7 @@ const Index = () => {
           </div>
         )}
 
-        {showChart && <ResistivityChart measurements={measurements} aValue={aValue} />}
+        {showChart && <ResistivityChart measurements={measurements} aValue={initialA} />}
 
         {isConnected && (
           <div className="glass-card rounded-lg p-2 mb-2 border border-muted/30">
