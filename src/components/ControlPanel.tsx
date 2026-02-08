@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Play, SkipForward, Download, Bluetooth, Power, BarChart3, MapPin, Globe } from 'lucide-react';
+import { Play, SkipForward, Bluetooth, Power, MapPin } from 'lucide-react';
 
 interface ControlPanelProps {
   isConnected: boolean;
@@ -12,13 +12,8 @@ interface ControlPanelProps {
   onDisconnect: () => void;
   onStartLine: (a: number) => void;
   onNextMeasure: () => void;
-  onExport: () => void;
-  onExportKML: () => void;
-  onAnalyse: () => void;
-  hasMeasurements: boolean;
   gpsEnabled: boolean;
   onGpsToggle: (enabled: boolean) => void;
-  hasGpsData: boolean;
 }
 
 export const ControlPanel = ({
@@ -28,13 +23,8 @@ export const ControlPanel = ({
   onDisconnect,
   onStartLine,
   onNextMeasure,
-  onExport,
-  onExportKML,
-  onAnalyse,
-  hasMeasurements,
   gpsEnabled,
   onGpsToggle,
-  hasGpsData,
 }: ControlPanelProps) => {
   const [aValue, setAValue] = useState('5.0');
 
@@ -117,38 +107,6 @@ export const ControlPanel = ({
           Suivante
         </Button>
 
-        <Button
-          type="button"
-          variant="control"
-          className="col-span-2"
-          onClick={() => onExport()}
-          disabled={!hasMeasurements}
-        >
-          <Download className="h-4 w-4" />
-          Exporter CSV
-        </Button>
-
-        <Button
-          type="button"
-          variant="secondary"
-          className="col-span-2"
-          onClick={() => onAnalyse()}
-          disabled={!hasMeasurements}
-        >
-          <BarChart3 className="h-4 w-4" />
-          📊 Analyse
-        </Button>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="col-span-2"
-          onClick={() => onExportKML()}
-          disabled={!hasMeasurements || !hasGpsData}
-        >
-          <Globe className="h-4 w-4" />
-          Exporter KML
-        </Button>
       </div>
     </div>
   );
