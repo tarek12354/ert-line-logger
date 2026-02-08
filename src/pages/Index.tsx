@@ -14,7 +14,7 @@ import { AboutModal } from '@/components/AboutModal';
 import { exportToCSV, exportToKML } from '@/utils/exportUtils';
 import { MeasurementData } from '@/types/measurement';
 import { toast } from 'sonner';
-import { AlertTriangle, Download } from 'lucide-react';
+import { AlertTriangle, Download, BarChart3, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -172,16 +172,14 @@ const Index = () => {
       return;
     }
 
-    const arrayCode = arrayType === 'wenner' ? 3 : 7;
-    
     // Build Res2DInv format with TAB separators
     let content = '';
-    content += `${surveyName}\n`;           // Line 1: Survey name
-    content += `${initialA.toFixed(2)}\n`;  // Line 2: Unit electrode spacing
-    content += `${arrayCode}\n`;            // Line 3: Array code (3=Wenner, 7=Schlumberger)
-    content += `${measurements.length}\n`;  // Line 4: Total measurements
-    content += `0\n`;                        // Line 5: Type of x-location
-    content += `0\n`;                        // Line 6: IP data flag
+    content += `${surveyName}\n`;           // Line 1: Project name
+    content += `${initialA.toFixed(2)}\n`;  // Line 2: Smallest spacing 'a'
+    content += `1\n`;                        // Line 3: 1 = Wenner array type
+    content += `${measurements.length}\n`;  // Line 4: Total data points
+    content += `1\n`;                        // Line 5: 1 = X-location coordinates
+    content += `0\n`;                        // Line 6: 0 = Resistance data
 
     // Lines 7+: Data rows [X-Location] \t [Current a] \t [Calculated ρa]
     // X = 1.5 × a (for VES with fixed C1)
@@ -424,13 +422,8 @@ const Index = () => {
             onDisconnect={handleDisconnect}
             onStartLine={handleStartLine}
             onNextMeasure={handleNextMeasure}
-            onExport={handleExport}
-            onExportKML={handleExportKML}
-            onAnalyse={() => setShowChart(!showChart)}
-            hasMeasurements={measurements.length > 0}
             gpsEnabled={gpsEnabled}
             onGpsToggle={setGpsEnabled}
-            hasGpsData={hasGpsData}
           />
         </div>
 
@@ -468,7 +461,7 @@ const Index = () => {
           scrollRef={measurementsEndRef}
         />
 
-        {/* Export Buttons */}
+        {/* Action Buttons - Below Measurements */}
         {measurements.length > 0 && (
           <div className="mt-3 mb-2 space-y-2">
             <Button 
@@ -485,6 +478,23 @@ const Index = () => {
             >
               <Download className="h-4 w-4 mr-2" />
               Exporter CSV ({measurements.length} mesures)
+            </Button>
+            <Button 
+              onClick={() => setShowChart(!showChart)}
+              variant="secondary"
+              className="w-full"
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              📊 Analyse
+            </Button>
+            <Button 
+              onClick={handleExportKML}
+              variant="outline"
+              className="w-full"
+              disabled={!hasGpsData}
+            >
+              <Globe className="h-4 w-4 mr-2" />
+              Exporter KML
             </Button>
           </div>
         )}
