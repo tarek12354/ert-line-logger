@@ -461,43 +461,45 @@ const Index = () => {
           scrollRef={measurementsEndRef}
         />
 
-        {/* Action Buttons - Below Measurements */}
-        {measurements.length > 0 && (
-          <div className="mt-3 mb-2 space-y-2">
-            <Button 
-              onClick={handleExportRes2DInv}
-              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Exporter DAT (Res2DInv)
-            </Button>
-            <Button 
-              onClick={handleExport}
-              variant="outline"
-              className="w-full"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Exporter CSV ({measurements.length} mesures)
-            </Button>
-            <Button 
-              onClick={() => setShowChart(!showChart)}
-              variant="secondary"
-              className="w-full"
-            >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              📊 Analyse
-            </Button>
-            <Button 
-              onClick={handleExportKML}
-              variant="outline"
-              className="w-full"
-              disabled={!hasGpsData}
-            >
-              <Globe className="h-4 w-4 mr-2" />
-              Exporter KML
-            </Button>
-          </div>
-        )}
+        {/* Action Buttons - Always visible below Measurements */}
+        <div className="mt-3 mb-2 space-y-2 glass-card rounded-xl p-4 border border-primary/20">
+          <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-2">Export & Analyse</p>
+          <Button 
+            onClick={handleExportRes2DInv}
+            className="w-full bg-primary hover:bg-primary/80 text-primary-foreground"
+            disabled={measurements.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exporter DAT (Res2DInv)
+          </Button>
+          <Button 
+            onClick={handleExport}
+            variant="outline"
+            className="w-full"
+            disabled={measurements.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exporter CSV ({measurements.length} mesures)
+          </Button>
+          <Button 
+            onClick={() => setShowChart(!showChart)}
+            variant="secondary"
+            className="w-full"
+            disabled={measurements.length === 0}
+          >
+            <BarChart3 className="h-4 w-4 mr-2" />
+            📊 Analyse
+          </Button>
+          <Button 
+            onClick={handleExportKML}
+            variant="outline"
+            className="w-full"
+            disabled={measurements.length === 0 || !hasGpsData}
+          >
+            <Globe className="h-4 w-4 mr-2" />
+            Exporter KML
+          </Button>
+        </div>
 
         {showChart && <ResistivityChart measurements={measurements} aValue={initialA} />}
 
